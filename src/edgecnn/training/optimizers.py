@@ -34,10 +34,13 @@ def build_optimizer(model: nn.Module, cfg: dict[str, Any]) -> torch.optim.Optimi
     separate registry keys because they are separate *experiments*, and the
     run_id has to distinguish their output directories.
 
-    If the model exposes ``param_groups()`` - Member 4's fine-tuned backbones
-    do - use it, so the pretrained weights get ``lr_backbone`` and the fresh
-    head gets ``lr_head``. Otherwise pass ``model.parameters()`` as one group.
-    Custom models need no special handling.
+    ``cfg`` here is the experiment's ``optimizer`` section - the only place an
+    optimizer is defined. For a pretrained backbone, split the parameters with
+    ``edgecnn.models.pretrained.param_groups(model, base_lr=optimizer.lr,
+    backbone_lr_scale=...)``, taking the scale from
+    ``model_settings(cfg)["backbone_lr_scale"]``: the fresh head trains at the
+    experiment's LR and the pretrained weights at a fraction of it. Custom
+    models pass ``model.parameters()`` as one group - no special handling.
 
     Raises:
         ValueError: on an unsupported name, listing the valid options.

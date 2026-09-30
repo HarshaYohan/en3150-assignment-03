@@ -1,16 +1,21 @@
 """SEAM 3 - the model-agnostic training loop.  Assignment Section 4 [25]
 
-Owner: Member 3.
+Owner: Member 3.   Called from notebooks 03, 04 and 05 - one loop, four models.
 
     +---------------------------------------------------------------------+
-    |  IN   model : nn.Module      from build_model()        (Seam 2)      |
-    |       data  : DataBundle     from build_dataloaders()  (Seam 1)      |
-    |       cfg   : ResolvedConfig                                         |
+    |  IN   model : nn.Module      from build_model_from_config() (Seam 2) |
+    |       data  : DataBundle     from build_dataloaders()       (Seam 1) |
+    |       cfg   : ResolvedConfig loaded with the notebook's MODE         |
     |                                                                      |
-    |  OUT  TrainResult                                                    |
+    |  OUT  TrainResult - ALWAYS returned, in every mode, so the notebook  |
+    |       can plot it inline.                                            |
+    |                                                                      |
+    |  official mode (cfg.is_official) also writes:                        |
     |       artifacts/checkpoints/<run_id>/best.pt   git-ignored           |
     |       artifacts/checkpoints/<run_id>/last.pt   git-ignored           |
     |       results/metrics/<run_id>/history.json    COMMITTED             |
+    |  synthetic / debug mode writes only:                                 |
+    |       artifacts/checkpoints/_debug/<run_id>/*.pt                     |
     +---------------------------------------------------------------------+
 
 One loop, four models. This file must contain no branch on model name. If it
@@ -45,8 +50,15 @@ class Trainer:
       Python-side timer will otherwise record queueing time, not compute.
     * **Records at least 20 epochs.** The assignment mandates it and
       ``history.schema.json`` enforces ``minItems: 20``.
-    * **Refuses to write results when ``subset_fraction < 1.0``.** A debug run
-      on 10% of the data must not end up in a committed comparison table.
+    * **Writes into ``results/`` only when ``cfg.is_official``.** In synthetic
+      and debug mode it still returns a full ``TrainResult`` (so the notebook
+      plots it inline) but checkpoints go to ``paths.checkpoint_dir(run_id,
+      official=False)`` and no ``history.json`` is written. A debug run on 5%
+      of the data must never reach a committed comparison table.
+    * **Progress via ``tqdm.auto``** - one updating line per epoch, which keeps
+      committed notebook outputs small. Never print per batch.
+    * **Resumable.** With ``training.resume: true`` it continues from
+      ``last.pt`` - useful when a long run is interrupted.
     """
 
     def __init__(self, cfg: ResolvedConfig) -> None:
@@ -57,20 +69,24 @@ class Trainer:
 
         Outline:
 
-        1. ``seed_everything(cfg.seed)`` before touching the model, so the
-           three Section 3 optimizer runs start from identical weights. If
-           they do not, the comparison measures initialisation noise as well
-           as the optimizer.
+        1. ``seed_everything(cfg.seed)`` first. Initial weights were already
+           seeded by ``build_model_from_config``; this reseed fixes dropout,
+           augmentation and batch order, so a notebook gives the same result
+           whichever cells ran before it. Together they make the three
+           Section 3 runs differ only in the optimizer.
         2. Move the model to ``resolve_device(cfg.device)``.
         3. Build the optimizer via ``edgecnn.training.optimizers.build_optimizer``
            (it handles the pretrained ``param_groups()`` case).
         4. Per epoch: train pass, val pass, scheduler step, record an
-           ``EpochRecord``, checkpoint when ``val_acc`` improves.
-        5. Write ``history.json`` through ``schema.write_json`` so a malformed
-           history can never reach disk.
+           ``EpochRecord``, checkpoint when ``val_acc`` improves - into
+           ``paths.checkpoint_dir(run_id, official=cfg.is_official)``.
+        5. Only if ``cfg.is_official``: write ``history.json`` through
+           ``schema.write_json``, so a malformed history can never reach disk.
 
         Returns:
-            :class:`edgecnn.contracts.types.TrainResult`.
+            :class:`edgecnn.contracts.types.TrainResult`, in every mode, with
+            ``checkpoint_path`` pointing at the best checkpoint actually
+            written - the notebook passes it straight to ``evaluate_run``.
         """
         raise NotImplementedError("Member 3: implement Trainer.fit")
 

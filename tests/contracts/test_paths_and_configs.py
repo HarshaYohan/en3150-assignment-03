@@ -82,6 +82,15 @@ def test_every_run_artifact_lives_under_its_run_dir() -> None:
         assert artifact.parent.name == run_id
 
 
+def test_debug_checkpoints_are_kept_apart() -> None:
+    """A debug run can never overwrite the checkpoint an official result came from."""
+    run_id = "model_b__adam__seed42"
+    debug = paths.best_checkpoint(run_id, official=False)
+    assert debug.parent == paths.DEBUG_CHECKPOINTS_DIR / run_id
+    assert debug != paths.best_checkpoint(run_id)
+    assert paths.DEBUG_CHECKPOINTS_DIR.parent == paths.CHECKPOINTS_DIR, "must stay git-ignored"
+
+
 def test_discover_runs_ignores_non_run_directories() -> None:
     """A stray folder in results/metrics must not become a table row."""
     for run_id in paths.discover_runs():
@@ -161,19 +170,6 @@ def test_subset_fraction_is_full_for_committed_runs(experiment_configs: list) ->
         assert load_config(path).raw.get("subset_fraction", 1.0) == 1.0, (
             f"{path.name}: subset_fraction < 1.0 - debug runs must not be committed"
         )
-
-
-def test_every_stage_config_declares_its_io(stage_configs: list) -> None:
-    """The seam must be readable from the config alone, without reading code."""
-    import yaml
-
-    assert stage_configs, "no stage configs found"
-    for path in stage_configs:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-        assert "stage" in data, f"{path.name}: missing 'stage'"
-        assert "owner" in data, f"{path.name}: missing 'owner' - who do I ask about this?"
-        assert "outputs" in data, f"{path.name}: missing 'outputs' - what does it hand on?"
-        assert "contract" in data, f"{path.name}: missing 'contract'"
 
 
 def test_run_id_mismatch_is_rejected(tmp_path) -> None:

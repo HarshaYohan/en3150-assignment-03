@@ -4,19 +4,21 @@
 # Owner: Member 1.  Shared file: PR + 1 review to change.
 #
 # Loaded first by edgecnn.config.load_config, then overridden by the stage
-# configs an experiment extends, then by the experiment file itself.
+# configs an experiment extends, then by the experiment file itself, then by
+# the MODE preset chosen in the notebook.
 # All paths are relative to the repository root.
 # ===========================================================================
 
 project: en3150-a03-edgecnn
 
 # --- Reproducibility -------------------------------------------------------
-# Every committed run uses seed 42. Changing this invalidates the comparison
-# table, because the split itself is drawn from this seed.
+# Every committed run uses seed 42. This is the TRAINING seed (weight init,
+# dropout, data order). The split has its own seed in stages/data.yaml, so a
+# different training seed would still see the same split.
 seed: 42
 
-# "auto" -> cuda if available, else cpu. Pin it to "cpu" when measuring
-# inference latency, so all four models are timed on the same hardware.
+# "auto" -> cuda if available, else cpu. Inference latency is always measured
+# on CPU regardless (see benchmark.latency_device in stages/evaluation.yaml).
 device: auto
 deterministic: true          # cudnn.deterministic; slower but repeatable
 
@@ -38,16 +40,16 @@ paths:
   figures_dir:     results/figures
   tables_dir:      results/tables
 
-# --- Development escape hatch ---------------------------------------------
-# subset_fraction < 1.0 trains on a slice of the data for fast iteration.
-# MUST be 1.0 for any run whose results get committed; scripts/train.py
-# refuses to write to results/metrics/ when it is lower.
+# --- Development slice -----------------------------------------------------
+# Fraction of the TRAIN split used. Anything below 1.0 makes the run
+# unofficial: cfg.is_official is False and nothing is written to results/.
+# Normally set through MODE = "debug" rather than edited here.
 subset_fraction: 1.0
 
 # --- DataLoader defaults ---------------------------------------------------
 dataloader:
   batch_size: 64
-  num_workers: 4             # set to 0 on Windows if you hit worker errors
+  num_workers: 4             # capped at the machine's CPU count by the loader
   pin_memory: true
   persistent_workers: true
   drop_last: false
@@ -55,4 +57,25 @@ dataloader:
 # --- Logging ---------------------------------------------------------------
 logging:
   level: INFO
-  progress_bar: true
+  progress_bar: true         # tqdm.auto: one updating line in notebooks
+
+# --- MODE presets ----------------------------------------------------------
+# Every notebook sets MODE in its setup cell and loads configs with
+#     load_config("configs/experiments/<run>.yaml", mode=MODE)
+# The preset is applied after the experiment file, as dotted overrides.
+#
+#   synthetic  generated fixture data, 2 epochs  - seconds; before EuroSAT exists
+#   debug      5% of EuroSAT, 2 epochs            - locate bugs step by step
+#   official   the experiment exactly as written  - the only mode that writes
+#                                                   into results/
+#
+# cfg.is_official additionally checks the values themselves (full data, at
+# least 20 epochs, real dataset), so an override cannot sneak a short run in.
+modes:
+  official: {}
+  debug:
+    subset_fraction: 0.05
+    training.epochs: 2
+  synthetic:
+    dataset.name: synthetic
+    training.epochs: 2

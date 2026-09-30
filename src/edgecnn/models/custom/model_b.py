@@ -1,10 +1,12 @@
 """Model B - lightweight depthwise-separable CNN.     Assignment Section 2 [20]
 
-Owner: Member 2.
+Owner: Member 2.   Exercised in notebooks/02_custom_architectures.ipynb,
+trained in notebooks/03_optimizer_study.ipynb.
 
     +---------------------------------------------------------------------+
-    |  IN   num_classes, input_shape=(3,64,64), **overrides from           |
-    |       configs/stages/models.yaml -> inputs.model_b                   |
+    |  IN   num_classes, input_shape=(3,64,64), and as **overrides the     |
+    |       keys of configs/stages/models.yaml -> model_b                  |
+    |       (stem, blocks, head, activation, batch_norm)                   |
     |  OUT  nn.Module, forward -> (B, num_classes) RAW LOGITS              |
     |                                                                      |
     |  HARD CONSTRAINT: <= 100,000 trainable parameters.                   |

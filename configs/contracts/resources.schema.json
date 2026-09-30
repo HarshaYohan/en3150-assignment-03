@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "edgecnn/resources",
   "title": "Resource profile",
-  "description": "SEAM 4. results/metrics/<run_id>/resources.json - the cost half of the accuracy/memory/compute trade-off. Produced by Member 1 (benchmark.py) for every model through one code path, because a comparison table assembled from four differently-measured numbers cannot be defended. Consumed by Member 4 for Sections 4 and 6. Committed to git.",
+  "description": "SEAM 4. results/metrics/<run_id>/resources.json - the cost half of the accuracy/memory/compute trade-off. Produced by Member 1's profile_all in notebook 06, for every model through one code path and in one session on one CPU, because a comparison table assembled from four differently-measured numbers cannot be defended. Consumed by Member 4 for Sections 4 and 6. Committed to git.",
   "type": "object",
   "required": [
     "run_id",

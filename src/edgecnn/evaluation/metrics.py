@@ -1,11 +1,13 @@
 """SEAM 4 - test-set metrics.                  Assignment Section 4 [25]
 
-Owner: Member 1.  Used for EVERY model, custom and pretrained alike.
+Owner: Member 1.  Used for EVERY model, custom and pretrained alike - called
+inline in notebooks 03, 04 and 05, right after each training run.
 
     +---------------------------------------------------------------------+
     |  IN   y_true, y_pred : int arrays of shape (N,)                      |
     |       class_names    : from DataBundle.class_names                   |
-    |  OUT  EvalResult -> results/metrics/<run_id>/test_metrics.json       |
+    |  OUT  EvalResult - always returned, in every mode                    |
+    |       -> results/metrics/<run_id>/test_metrics.json  (official only) |
     +---------------------------------------------------------------------+
 
 Why one owner rather than each member scoring their own model: four
@@ -20,6 +22,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     import numpy as np
     from torch import nn
 
@@ -68,15 +72,26 @@ def predict(model: nn.Module, loader: object, device: str) -> tuple[np.ndarray, 
     raise NotImplementedError("Member 1: implement predict")
 
 
-def evaluate_run(cfg: ResolvedConfig, data: DataBundle) -> EvalResult:
-    """Full evaluation of one run, from checkpoint to committed JSON.
+def evaluate_run(
+    cfg: ResolvedConfig,
+    data: DataBundle,
+    checkpoint_path: Path | None = None,
+) -> EvalResult:
+    """Full evaluation of one run, from checkpoint to (official) JSON.
 
-    1. Load ``artifacts/checkpoints/<run_id>/best.pt``, validating its keys
-       with ``schema.validate_checkpoint``.
-    2. Rebuild the model via ``build_model`` and load the state dict.
+    Notebooks call it right after training, passing the trainer's result::
+
+        result = Trainer(cfg).fit(model, data, cfg)
+        evaluation = evaluate_run(cfg, data, result.checkpoint_path)
+
+    1. Load the best checkpoint - ``checkpoint_path`` if given, else
+       ``paths.best_checkpoint(cfg.run_id, official=cfg.is_official)`` -
+       validating its keys with ``schema.validate_checkpoint``.
+    2. Rebuild the model via ``build_model_from_config`` and load the weights.
     3. Predict over ``data.test`` - the first and only time this split is read.
-    4. ``compute_metrics``, then write ``test_metrics.json`` through
-       ``schema.write_json``.
+    4. ``compute_metrics``; only if ``cfg.is_official``, write
+       ``test_metrics.json`` through ``schema.write_json``. The ``EvalResult``
+       is returned in every mode so the notebook can show it inline.
 
     Sanity check worth asserting: the confusion matrix must sum to
     ``split_meta.json -> counts.test``. If it does not, the wrong split was

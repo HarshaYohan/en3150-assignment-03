@@ -1,12 +1,13 @@
-"""SEAM 3 - training loop, optimizers, and the Section 3 study.
+"""SEAM 3 - training loop, optimizers, and the Section 3 summary.
 
-Owner: Member 3.
+Owner: Member 3. Driven from notebooks 03 and 04 (and 05, Member 4).
 
-    from edgecnn.training import Trainer, build_optimizer
+    from edgecnn.training import Trainer
+    result = Trainer(cfg).fit(model, data, cfg)   # returns in every MODE
 """
 
 from edgecnn.training.callbacks import CheckpointManager, EarlyStopping
-from edgecnn.training.optimizer_study import run_optimizer_study, summarize_study
+from edgecnn.training.optimizer_study import summarize_study
 from edgecnn.training.optimizers import (
     SUPPORTED_OPTIMIZERS,
     SUPPORTED_SCHEDULERS,
@@ -25,6 +26,5 @@ __all__ = [
     "build_optimizer",
     "build_scheduler",
     "describe_optimizer",
-    "run_optimizer_study",
     "summarize_study",
 ]

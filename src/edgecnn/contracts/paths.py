@@ -25,7 +25,7 @@ trips cleanly. Examples::
     model_b__sgd_momentum__seed42
     mobilenet_v2__adam__seed42
 
-Layout produced::
+Layout produced by an OFFICIAL run::
 
     artifacts/checkpoints/<run_id>/best.pt
                                    last.pt
@@ -34,6 +34,9 @@ Layout produced::
                              resources.json
     results/figures/<run_id>/curves.png
                              confusion_matrix.png
+
+A synthetic or debug run writes only checkpoints, and only under
+``artifacts/checkpoints/_debug/<run_id>/`` - it never touches ``results/``.
 """
 
 from __future__ import annotations
@@ -59,7 +62,12 @@ SPLITS_DIR: Path = DATA_DIR / "splits"
 
 ARTIFACTS_DIR: Path = REPO_ROOT / "artifacts"
 CHECKPOINTS_DIR: Path = ARTIFACTS_DIR / "checkpoints"
+#: Checkpoints from synthetic/debug runs. Git-ignored like all checkpoints, and
+#: kept apart so a debug run can never overwrite an official best.pt.
+DEBUG_CHECKPOINTS_DIR: Path = CHECKPOINTS_DIR / "_debug"
 EXPORTS_DIR: Path = ARTIFACTS_DIR / "exports"
+
+NOTEBOOKS_DIR: Path = REPO_ROOT / "notebooks"
 
 RESULTS_DIR: Path = REPO_ROOT / "results"
 METRICS_DIR: Path = RESULTS_DIR / "metrics"
@@ -71,13 +79,25 @@ REPORT_FIGURES_DIR: Path = REPORT_DIR / "figures"
 
 TESTS_DIR: Path = REPO_ROOT / "tests"
 FIXTURES_DIR: Path = TESTS_DIR / "fixtures"
+#: Generated on demand by the synthetic fixture; git-ignored, deterministic.
+SYNTHETIC_FIXTURE_DIR: Path = FIXTURES_DIR / "synthetic"
 
 # --- Seam 1 artifacts (Member 1) -------------------------------------------
 SPLIT_MANIFEST: Path = SPLITS_DIR / "split_manifest.csv"
 SPLIT_META: Path = SPLITS_DIR / "split_meta.json"
 NORM_STATS: Path = SPLITS_DIR / "norm_stats.json"
 
-# --- Seam 5 artifacts (Member 4) -------------------------------------------
+# --- Section 1 figures (Member 1, notebook 01) ------------------------------
+DATASET_FIGURES_DIR: Path = FIGURES_DIR / "dataset"
+
+# --- Section 2 artifacts (Member 2, notebook 02) ---------------------------
+CUSTOM_ARCHITECTURES_TABLE: Path = TABLES_DIR / "custom_architectures.md"
+PARAM_BREAKDOWN_TABLE: Path = TABLES_DIR / "param_breakdown.md"
+
+# --- Section 3 cross-run figure (Member 3, notebook 03) --------------------
+OPTIMIZER_OVERLAY_PNG: Path = FIGURES_DIR / "optimizer_overlay.png"
+
+# --- Seam 5 artifacts (Member 4, notebook 07) ------------------------------
 CUSTOM_COMPARISON_TABLE: Path = TABLES_DIR / "custom_model_comparison.md"
 OPTIMIZER_COMPARISON_TABLE: Path = TABLES_DIR / "optimizer_comparison.md"
 FINAL_COMPARISON_TABLE: Path = TABLES_DIR / "final_comparison.md"
@@ -126,19 +146,23 @@ def parse_run_id(run_id: str) -> tuple[str, str, int]:
 # ---------------------------------------------------------------------------
 
 
-def checkpoint_dir(run_id: str) -> Path:
-    """Directory holding this run's weights. Git-ignored (too large)."""
-    return CHECKPOINTS_DIR / run_id
+def checkpoint_dir(run_id: str, official: bool = True) -> Path:
+    """Directory holding this run's weights. Git-ignored (too large).
+
+    Pass ``official=cfg.is_official``: unofficial runs go under ``_debug/`` so
+    they can never overwrite the checkpoint an official result came from.
+    """
+    return (CHECKPOINTS_DIR if official else DEBUG_CHECKPOINTS_DIR) / run_id
 
 
-def best_checkpoint(run_id: str) -> Path:
+def best_checkpoint(run_id: str, official: bool = True) -> Path:
     """Highest-validation-accuracy checkpoint. Member 1 evaluates *this* one."""
-    return checkpoint_dir(run_id) / "best.pt"
+    return checkpoint_dir(run_id, official) / "best.pt"
 
 
-def last_checkpoint(run_id: str) -> Path:
+def last_checkpoint(run_id: str, official: bool = True) -> Path:
     """Final-epoch checkpoint, kept for resuming an interrupted run."""
-    return checkpoint_dir(run_id) / "last.pt"
+    return checkpoint_dir(run_id, official) / "last.pt"
 
 
 def metrics_dir(run_id: str) -> Path:
@@ -181,9 +205,16 @@ def experiment_config(run_id: str) -> Path:
     return CONFIGS_DIR / "experiments" / f"{run_id.rsplit('__seed', 1)[0]}.yaml"
 
 
-def ensure_run_dirs(run_id: str) -> None:
-    """Create every directory this run writes into. Safe to call repeatedly."""
-    for directory in (checkpoint_dir(run_id), metrics_dir(run_id), figures_dir(run_id)):
+def ensure_run_dirs(run_id: str, official: bool = True) -> None:
+    """Create every directory this run writes into. Safe to call repeatedly.
+
+    An unofficial run only ever gets a debug checkpoint directory - never a
+    directory under ``results/``.
+    """
+    directories = [checkpoint_dir(run_id, official)]
+    if official:
+        directories += [metrics_dir(run_id), figures_dir(run_id)]
+    for directory in directories:
         directory.mkdir(parents=True, exist_ok=True)
 
 

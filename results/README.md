@@ -1,46 +1,45 @@
 # `results/` — everything the report is built from
 
-**Committed in full.** This folder is the reason Member 4 can assemble the report in seconds, on a
-laptop, with no GPU, without re-running anyone else's training.
+**Committed in full.** Thanks to this folder, Member 4 can assemble every table in seconds, on a
+laptop, with no GPU, without re-running anyone's training.
 
-| Folder | Contents | Producer |
+**Only official runs write here.** Synthetic and debug runs show their results inline in the notebook
+and write nothing to this folder. Everything in it therefore came from a full official run.
+
+| Folder | Contents | Produced by |
 |---|---|---|
-| `metrics/<run_id>/` | `history.json`, `test_metrics.json`, `resources.json` | M3, M1 |
-| `figures/` | Loss curves, confusion matrices, trade-off scatter plots | M3, M4 |
-| `tables/` | Markdown comparison tables, pasted straight into the report | M2, M4 |
+| `metrics/<run_id>/` | `history.json`, `test_metrics.json`, `resources.json` | notebooks `03`–`05` (history, test metrics), `06` (resources) |
+| `figures/` | loss curves, confusion matrices, the optimizer overlay, dataset and trade-off figures | notebooks `01`, `03`–`05`, `07` |
+| `tables/` | Markdown tables, pasted straight into the report | notebooks `02` (§2) and `07` (§3, §4, §6) |
 
 ## Per-run layout
 
 ```
 results/metrics/model_b__adam__seed42/
-├── history.json         Member 3 — per-epoch loss, accuracy, LR, epoch time
-├── test_metrics.json    Member 1 — accuracy, macro P/R/F1, per-class, confusion matrix
-└── resources.json       Member 1 — params, size, MACs, latency, peak memory, device
+├── history.json         notebook 03 - per-epoch loss, accuracy, LR, epoch time
+├── test_metrics.json    notebook 03 - accuracy, macro P/R/F1, per-class, confusion matrix
+└── resources.json       notebook 06 - params, size, MACs, latency, peak memory, device
 ```
 
 `<run_id>` is always `{model}__{optimizer}__seed{seed}`, derived by
-`edgecnn.contracts.paths.make_run_id`. Never assembled by hand.
+`edgecnn.contracts.paths.make_run_id` and never built by hand.
 
-## Why JSON is committed but checkpoints are not
+## Why the JSON is committed but checkpoints are not
 
-Member 4 cannot build the §4, §5 or §6 tables without every other member's `test_metrics.json` and
-`resources.json`. If those lived only on the machine that produced them, assembling the report
-would mean re-running every experiment the week it is due.
+Member 4 cannot build the §4, §5 or §6 tables without everyone else's `test_metrics.json` and
+`resources.json`. If those existed only on the machine that produced them, assembling the report would
+mean re-running every experiment the week it is due. Each is a few kilobytes. Checkpoints are
+megabytes and can be regenerated, so they are git-ignored instead.
 
-These files are a few kilobytes each. Checkpoints are megabytes and fully regenerable, so
-`artifacts/checkpoints/` is git-ignored instead.
-
-**So: commit your metrics JSON as soon as a run finishes.** It is not optional tidiness — it is the
-hand-off.
+**Commit a run's files as soon as its official run finishes**, together with the notebook that
+produced them. They are the hand-off to the next member, not optional tidying.
 
 ## Rules
 
-- **Never hand-edit a file in here.** Every one is schema-validated on write and on read; an edited
-  file will fail `pytest tests/contracts` and, worse, silently misreport a number in the table.
-- **Never commit results from a debug run.** `subset_fraction < 1.0`, fewer than 20 epochs, or the
-  synthetic dataset. The first two are refused by `scripts/train.py`; the third is on you to check.
-- **Figures are generated, not hand-made.** `results/figures/` is the source; `report/figures/` is
-  a mirror produced by `scripts/build_report_assets.py`.
+- **Never hand-edit a file in here.** Each one is schema-validated on write and on read. An edited
+  file fails `pytest tests/contracts` and, worse, can silently misreport a number in a table.
+- **Figures are generated, never hand-made.** `results/figures/` is the source; `report/figures/` is a
+  copy that notebook `07` makes.
 
 ## Expected contents when complete
 
@@ -52,5 +51,5 @@ model_b__adam__seed42          model_b__sgd_momentum__seed42
 mobilenet_v2__adam__seed42     squeezenet1_1__adam__seed42
 ```
 
-Three tables: `custom_model_comparison.md` (§4), `optimizer_comparison.md` (§3),
-`final_comparison.md` (§6).
+and five tables: `custom_architectures.md` and `param_breakdown.md` (§2), `optimizer_comparison.md`
+(§3), `custom_model_comparison.md` (§4) and `final_comparison.md` (§6).

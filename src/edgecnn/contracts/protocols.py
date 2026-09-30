@@ -91,12 +91,14 @@ class DataProvider(Protocol):
 class TrainerProtocol(Protocol):
     """SEAM 3 - produced by Member 3, consumed by Members 1 and 4.
 
-    ``fit`` owns three side effects, and they are part of the contract:
+    ``fit`` always returns a ``TrainResult`` - in every MODE, so notebooks can
+    plot it inline. Its side effects are part of the contract:
 
-    * writes ``artifacts/checkpoints/<run_id>/best.pt`` with exactly the keys
-      in :data:`edgecnn.contracts.types.CHECKPOINT_KEYS`;
-    * writes ``results/metrics/<run_id>/history.json`` validated against
-      ``configs/contracts/history.schema.json``;
+    * writes ``best.pt`` with exactly the keys in
+      :data:`edgecnn.contracts.types.CHECKPOINT_KEYS`, under
+      ``paths.checkpoint_dir(run_id, official=cfg.is_official)``;
+    * only when ``cfg.is_official``, writes ``results/metrics/<run_id>/history.json``
+      validated against ``configs/contracts/history.schema.json``;
     * leaves the test split untouched. The trainer must never construct a
       loader over ``DataBundle.test``. Section 4 asks for an honest held-out
       number, and touching it invalidates every result in the report.
@@ -109,8 +111,10 @@ class TrainerProtocol(Protocol):
 class EvaluatorProtocol(Protocol):
     """SEAM 4 - produced by Member 1, consumed by Member 4.
 
-    Called once per run, after training has finished, against
-    ``DataBundle.test``. Writes ``test_metrics.json`` and ``resources.json``.
+    Called once per run, right after training, against ``DataBundle.test``.
+    Returns an ``EvalResult`` in every MODE; writes ``test_metrics.json`` only
+    when ``cfg.is_official``. (``resources.json`` comes from notebook 06, which
+    profiles every architecture in one session.)
     """
 
     def evaluate(

@@ -41,6 +41,13 @@ history = schema.read_json(paths.history_json(run_id), "history")   # validates 
 A `ContractViolation` means an interface broke. It is not a bug in the code that happened to raise
 it — tell whoever owns the producing stage.
 
+## Only official runs write these files
+
+Every producer writes its artifact only when `cfg.is_official`. Synthetic and debug runs return the
+same objects in memory, so notebooks can show them, but never write them. Every file in
+`data/splits/` and `results/metrics/` was therefore produced by a full official run. The
+`history.epochs` minimum of 20 is a second guard against a short run slipping through.
+
 ## CSV is handled separately
 
 `split_manifest.csv` is not JSON, so its header is checked by

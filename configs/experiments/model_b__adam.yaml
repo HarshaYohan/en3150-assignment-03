@@ -1,7 +1,7 @@
-# Run: model_b__adam__seed42
+# Run: model_b__adam__seed42                      Owner: Member 3
+# Notebook: notebooks/03_optimizer_study.ipynb
 # The headline resource-constrained model. Serves Section 3 (chosen optimizer),
 # Section 4 (A-vs-B table) and Section 6 (vs the SOTA backbones).
-# Owner: Member 3.
 extends: [data, models, training, evaluation]
 
 model:
@@ -10,10 +10,8 @@ model:
 optimizer:
   name: adam
   lr: 0.001
+  betas: [0.9, 0.999]
   weight_decay: 0.0001
-
-training:
-  epochs: 30
 
 notes: >-
   Adam is the chosen optimizer. Justification for Section 3: depthwise kernels

@@ -1,7 +1,9 @@
-# Run: model_a__adam__seed42
+# Run: model_a__adam__seed42                      Owner: Member 3
+# Notebook: notebooks/04_custom_training_evaluation.ipynb
 # Section 4 - the standard-CNN baseline that Model B is compared against.
-# Owner: Member 3.  Run with:
-#   python scripts/train.py --config configs/experiments/model_a__adam.yaml
+#
+# Only what makes this run distinct lives here. Everything else (epochs,
+# scheduler, augmentation, ...) comes from the stages listed in `extends`.
 extends: [data, models, training, evaluation]
 
 model:
@@ -10,10 +12,8 @@ model:
 optimizer:
   name: adam
   lr: 0.001
+  betas: [0.9, 0.999]
   weight_decay: 0.0001
-
-training:
-  epochs: 30
 
 notes: >-
   Unconstrained standard CNN. Its parameter count and MACs are the reference

@@ -9,7 +9,7 @@ test whose subject raises ``NotImplementedError`` reports as *skipped*, and
 turns into a real assertion the moment that stub is filled in - no test edit
 required.
 
-    pytest tests/contracts -q      # after every git pull
+    pytest tests/contracts         # after every git pull (pyproject.toml adds -q)
 """
 
 from __future__ import annotations

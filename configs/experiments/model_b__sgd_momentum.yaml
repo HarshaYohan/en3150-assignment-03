@@ -1,7 +1,7 @@
-# Run: model_b__sgd_momentum__seed42
+# Run: model_b__sgd_momentum__seed42              Owner: Member 3
+# Notebook: notebooks/03_optimizer_study.ipynb
 # Section 3 baseline (b): SGD with momentum. Isolates the momentum term -
 # only `momentum` differs from model_b__sgd.yaml.
-# Owner: Member 3.
 extends: [data, models, training, evaluation]
 
 model:
@@ -13,9 +13,6 @@ optimizer:
   momentum: 0.9
   nesterov: false
   weight_decay: 0.0001
-
-training:
-  epochs: 30
 
 notes: >-
   Section 3 asks explicitly for the impact of the momentum parameter. Discuss

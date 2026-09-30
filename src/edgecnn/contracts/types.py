@@ -51,6 +51,14 @@ SPLIT_NAMES: tuple[str, str, str] = ("train", "val", "test")
 #: Enforced by tests/test_param_budget.py, not by eyeballing a printout.
 MODEL_B_PARAM_BUDGET: int = 100_000
 
+#: Assignment Section 4: every model trains for at least this many epochs.
+#: A run below it can never be official, and history.schema.json rejects it.
+MIN_EPOCHS: int = 20
+
+#: Run modes, selected per notebook with ``MODE = ...``. Presets live in
+#: configs/base.yaml -> modes. Only "official" ever writes into results/.
+RUN_MODES: tuple[str, str, str] = ("synthetic", "debug", "official")
+
 #: Default seed. Overridable per-experiment, but every committed run uses 42
 #: so the comparison table is reproducible.
 DEFAULT_SEED: int = 42
@@ -252,11 +260,15 @@ class ResourceProfile:
 
 @dataclass(frozen=True)
 class ResolvedConfig:
-    """A merged ``base.yaml`` <- stage config <- experiment config.
+    """A merged ``base.yaml`` <- stages <- experiment <- MODE preset.
 
     ``raw`` holds the fully merged mapping. The named fields are the handful of
     values that appear in signatures across every member's code, hoisted out so
     nobody writes ``cfg["experiment"]["seed"]`` and typoes the key path.
+
+    Every setting has exactly one home, at the top level: ``cfg.section("training")``,
+    ``cfg.section("optimizer")``, ``cfg.section("dataset")`` and so on. Stage
+    I/O declarations live separately under ``cfg.section("stages")``.
     """
 
     raw: dict[str, Any]
@@ -265,8 +277,32 @@ class ResolvedConfig:
     optimizer_name: str
     seed: int
     device: str
+    mode: str = "official"
+    """One of ``RUN_MODES``. Set by the notebook's ``MODE`` variable."""
 
     def section(self, name: str) -> dict[str, Any]:
         """Return a top-level config section, or an empty dict if absent."""
         value = self.raw.get(name, {})
         return value if isinstance(value, dict) else {}
+
+    @property
+    def is_official(self) -> bool:
+        """True only for a run whose results may be committed.
+
+        THE rule every library function follows: always return your result,
+        but write into ``results/`` (or ``data/splits/``) only when this is
+        True. It requires official mode AND values that meet the assignment,
+        so a hand-typed override cannot sneak a short run into the report:
+
+        * ``mode == "official"``
+        * full training data (``subset_fraction == 1.0``)
+        * at least ``MIN_EPOCHS`` epochs
+        * a real dataset, not the synthetic fixture
+        """
+        dataset_name = self.section("dataset").get("name")
+        return (
+            self.mode == "official"
+            and float(self.raw.get("subset_fraction", 1.0)) == 1.0
+            and int(self.section("training").get("epochs", 0)) >= MIN_EPOCHS
+            and dataset_name not in (None, "synthetic")
+        )

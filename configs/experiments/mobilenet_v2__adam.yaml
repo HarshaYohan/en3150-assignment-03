@@ -1,6 +1,6 @@
-# Run: mobilenet_v2__adam__seed42
+# Run: mobilenet_v2__adam__seed42                 Owner: Member 4
+# Notebook: notebooks/05_pretrained_finetuning.ipynb
 # Section 5 - lightweight SOTA backbone #1, fine-tuned on the SAME splits.
-# Owner: Member 4.
 extends: [data, models, pretrained, training, evaluation]
 
 model:
@@ -8,11 +8,9 @@ model:
 
 optimizer:
   name: adam
-  lr: 0.001            # head LR; the backbone uses lr_backbone via param_groups
+  lr: 0.001            # head LR; backbone gets lr x pretrained.backbones[].backbone_lr_scale
+  betas: [0.9, 0.999]
   weight_decay: 0.0001
-
-training:
-  epochs: 30
 
 notes: >-
   Fine-tuned at 64x64, not upsampled to 224 - see the reasoning in

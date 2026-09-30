@@ -1,21 +1,25 @@
 # `results/figures/` — generated figures
 
-**COMMITTED.** Producers: Member 3 (curves), Member 4 (everything else).
+**COMMITTED.** Written only by official runs, when a notebook passes `write=True` (i.e.
+`write=cfg.is_official`).
 
 ```
-results/figures/<run_id>/curves.png              Section 4 — train/val loss and accuracy
-results/figures/<run_id>/confusion_matrix.png    Section 4 — per-run confusion matrix
-results/figures/optimizer_overlay.png            Section 3 — sgd vs sgd_momentum vs adam
-results/figures/accuracy_vs_params.png           Section 6 — the trade-off
-results/figures/accuracy_vs_macs.png             Section 6 — compute, not just memory
+results/figures/dataset/class_distribution.png   notebook 01 - §1
+results/figures/dataset/sample_grid.png          notebook 01 - §1
+results/figures/<run_id>/curves.png              notebooks 03-05 - §3, §4, §5 loss curves
+results/figures/<run_id>/confusion_matrix.png    notebooks 04-05 - §4, §5
+results/figures/optimizer_overlay.png            notebook 03 - §3, the three optimizers on one axis
+results/figures/accuracy_vs_*.png                notebook 07 - §6, the trade-off
 ```
 
-Figures are **generated, never hand-made**. `scripts/build_report_assets.py` mirrors this folder
-into `report/figures/`, so there is exactly one source of truth and figures cannot drift out of
-sync with the numbers in the tables.
+Figures are **generated, never hand-made**. Notebook `07` copies this folder into `report/figures/`,
+so there is one source of truth, and a figure can never drift out of sync with the numbers in the
+tables.
 
-Style comes from `edgecnn.evaluation.plotting` — shared colours per model and per optimizer, so a
-reader who learns "orange is Model B" on the loss curves does not relearn it on the scatter plot.
+Every plot is also **returned** to the notebook and shown inline at a small resolution, which keeps
+committed notebooks light. The PNG saved here is at print resolution. Style comes from
+`edgecnn.evaluation.plotting`, which gives each model and each optimizer a fixed colour: a reader who
+learns "orange is Model B" on the loss curves does not have to relearn it on the scatter plot.
 
-Confusion matrices are stored as raw counts in JSON and normalised at plot time, by **true class**,
-so the diagonal reads as per-class recall.
+Confusion matrices are stored as raw counts in JSON and normalised only when plotted, by **true
+class**, so the diagonal reads as per-class recall.
