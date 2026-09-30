@@ -1,39 +1,70 @@
-"""Reproducibility helpers.
+"""Reproducibility: one call seeds every random number generator the project uses.
 
-Owner: Member 1.  Called at the top of every script, before anything else.
+Two runs of the same configuration should produce the same numbers. That matters
+twice over here: the assignment asks for seeds to be recorded, and the optimizer
+comparison is only meaningful if every optimizer starts from the same initial
+weights and sees the same batches.
 
-The assignment asks for random seeds to be recorded, and the four-way split
-makes it load-bearing for a different reason: if Member 3's Adam run and
-Member 3's SGD run do not start from the same initial weights, the Section 3
-comparison measures initialisation noise alongside the optimizer.
+Team notes:
+Owner: Member 1. Called at the start of Trainer.fit, and by build_model_from_config
+(through torch.manual_seed) before a model is constructed.
 """
 
 from __future__ import annotations
 
+import os
+import random
+
+#: cuBLAS needs this workspace setting for deterministic GPU matrix products.
+#: It only takes effect if set before CUDA is first used in the process.
+CUBLAS_WORKSPACE = ":4096:8"
+
 
 def seed_everything(seed: int, deterministic: bool = True) -> None:
-    """Seed Python, NumPy and torch (CPU and CUDA).
+    """Seed Python, NumPy and PyTorch (CPU and every GPU).
 
     Args:
-        seed: The seed. Every committed run uses 42.
-        deterministic: Set ``cudnn.deterministic=True`` and
-            ``cudnn.benchmark=False``. Costs some throughput and is worth it -
-            without it two runs of the same config differ by a few tenths of a
-            percent, which is the same order as the Model A / Model B gap the
-            report is trying to explain.
+        seed: The seed. Every reported run uses 42.
+        deterministic: Also make GPU computation repeatable: cuDNN picks
+            deterministic kernels and stops auto-tuning, and PyTorch prefers
+            deterministic algorithms where it has them. This costs some speed.
+            Without it, two runs of the same configuration can differ by a few
+            tenths of a percent - the same size as the differences between
+            models that the report compares.
 
-    Also call ``torch.use_deterministic_algorithms(True)`` where supported, and
-    note in the report that full CUDA determinism additionally needs
-    ``CUBLAS_WORKSPACE_CONFIG=:4096:8`` in the environment.
+    A few GPU operations have no deterministic implementation. PyTorch then
+    emits a warning instead of stopping the run, and the report should note
+    that such runs are reproducible only up to that operation.
     """
-    raise NotImplementedError("Member 1: implement seed_everything")
+    import numpy as np
+    import torch
+
+    if deterministic:
+        os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", CUBLAS_WORKSPACE)
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)  # seeds the CPU and every CUDA device
+
+    torch.backends.cudnn.deterministic = deterministic
+    torch.backends.cudnn.benchmark = not deterministic
+    torch.use_deterministic_algorithms(deterministic, warn_only=True)
 
 
 def worker_init_fn(worker_id: int) -> None:
-    """Seed each DataLoader worker deterministically.
+    """Seed NumPy and Python's ``random`` inside a DataLoader worker process.
 
-    Pass to ``DataLoader(worker_init_fn=...)``. Without it, workers inherit
-    non-deterministic seeds and augmentation differs run to run even when
-    :func:`seed_everything` was called.
+    PyTorch already gives each worker its own torch seed (the loader's base seed
+    plus the worker id), but NumPy and ``random`` would otherwise start every
+    worker from the same state. Pass this as ``DataLoader(worker_init_fn=...)``.
+
+    Args:
+        worker_id: Supplied by the DataLoader; unused, because
+            ``torch.initial_seed()`` is already unique per worker.
     """
-    raise NotImplementedError("Member 1: implement worker_init_fn")
+    import numpy as np
+    import torch
+
+    worker_seed = torch.initial_seed() % 2**32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)

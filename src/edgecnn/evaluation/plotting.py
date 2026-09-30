@@ -1,33 +1,25 @@
-"""Shared figure style.
+"""Shared figure style, so every figure in the report looks like it belongs to one report.
 
-Owner: Member 1.  Used by Member 3 (curves.py) and Member 4 (reporting.py).
+Figures are drawn at two resolutions on purpose. Inline figures are stored
+inside the notebooks, so they render at ``INLINE_DPI`` to keep the notebooks
+small; the PNG files used in the report are saved at ``FIGURE_DPI``.
 
-Only style and generic helpers live here. The actual figures belong to whoever
-owns the marking section they support - see curves.py and reporting.py.
-
-The point of a shared style module is that figures from three different people
-sit on facing pages of one report and should not look like three reports.
-
-Two resolutions, on purpose
----------------------------
-Notebooks are committed WITH their outputs, and every inline figure is stored
-inside the .ipynb as an image. So inline figures render at ``INLINE_DPI``
-(small notebooks, readable diffs), while the PNG saved for the report is
-written at ``FIGURE_DPI``.
+Team notes:
+Owner: Member 1. Only style and generic helpers live here - the figures
+themselves belong to curves.py (Member 3) and reporting.py (Member 4).
 """
 
 from __future__ import annotations
 
+import shutil
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from matplotlib.figure import Figure
 
-#: Consistent colour per model across every figure in the report. A reader who
-#: learns "orange is Model B" on the loss curves should not have to relearn it
-#: on the scatter plot.
+#: One colour per model across every figure: a reader who learns "orange is
+#: Model B" on the loss curves should not have to relearn it on the scatter plot.
 MODEL_COLORS: dict[str, str] = {
     "model_a": "#4C72B0",
     "model_b": "#DD8452",
@@ -35,7 +27,7 @@ MODEL_COLORS: dict[str, str] = {
     "squeezenet1_1": "#C44E52",
 }
 
-#: Consistent colour per optimizer for the Section 3 overlay.
+#: One colour per optimizer, for the optimizer-comparison figures.
 OPTIMIZER_COLORS: dict[str, str] = {
     "sgd": "#8172B3",
     "sgd_momentum": "#937860",
@@ -45,45 +37,96 @@ OPTIMIZER_COLORS: dict[str, str] = {
 #: Inline (notebook) resolution - keeps committed notebooks small.
 INLINE_DPI: int = 100
 
-#: Saved-PNG resolution - figures go into a printed report.
+#: Saved-PNG resolution - the figures go into a printed report.
 FIGURE_DPI: int = 200
+
+#: Colour for anything without a fixed colour.
+NEUTRAL_GREY: str = "#7F7F7F"
+
+_STYLE: dict[str, Any] = {
+    "figure.dpi": INLINE_DPI,
+    "savefig.dpi": FIGURE_DPI,
+    "savefig.bbox": "tight",
+    "figure.figsize": (6.0, 4.0),
+    "figure.facecolor": "white",
+    "axes.facecolor": "white",
+    "savefig.facecolor": "white",
+    # Sizes chosen to stay legible when a figure is scaled to half a page width.
+    "font.size": 11,
+    "axes.titlesize": 12,
+    "axes.labelsize": 11,
+    "xtick.labelsize": 10,
+    "ytick.labelsize": 10,
+    "legend.fontsize": 10,
+    "legend.frameon": False,
+    "axes.grid": True,
+    "grid.alpha": 0.3,
+    "grid.linestyle": "-",
+    "axes.spines.top": False,
+    "axes.spines.right": False,
+    "lines.linewidth": 1.8,
+}
 
 
 def apply_style() -> None:
-    """Set matplotlib rcParams once, in each notebook's setup cell.
+    """Apply the shared matplotlib style. Call once per notebook, before plotting.
 
-    Sets ``figure.dpi = INLINE_DPI`` and ``savefig.dpi = FIGURE_DPI``. Font
-    sizes should stay legible after the figure is scaled into a two-column
-    report - a default-sized axis label is usually unreadable at half width.
-    Prefer a white background and a light grid; a dark theme wastes toner and
-    reproduces badly in print.
+    Sets inline figures to ``INLINE_DPI`` and saved files to ``FIGURE_DPI``, with
+    font sizes that remain legible at half page width, a white background and a
+    light grid - a dark theme wastes toner and reproduces badly in print.
     """
-    raise NotImplementedError("Member 1: implement apply_style")
+    import matplotlib.pyplot as plt  # activates the notebook backend first,
+                                     # so the settings below take precedence
+
+    plt.rcParams.update(_STYLE)
 
 
 def save_figure(fig: Figure, path: Path, also_copy_to: Path | None = None) -> Path:
-    """Save at FIGURE_DPI with a tight bounding box, creating parent dirs.
+    """Save ``fig`` as a print-quality PNG, creating parent directories.
 
-    Called only for official outputs - the plotting functions decide that.
-    ``also_copy_to`` mirrors the figure into ``report/figures/``, so the report
-    always pulls from one place.
+    Args:
+        fig: The figure to save.
+        path: Destination file.
+        also_copy_to: Optional folder (or file path) that receives a copy, e.g.
+            ``report/figures/``, so the report always pulls from one place.
+
+    Returns:
+        ``path``.
     """
-    raise NotImplementedError("Member 1: implement save_figure")
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(path, dpi=FIGURE_DPI, bbox_inches="tight", facecolor="white")
+    if also_copy_to is not None:
+        target = Path(also_copy_to)
+        if target.suffix == "":
+            target = target / path.name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, target)
+    return path
 
 
 def color_for(key: str, kind: str = "model") -> str:
-    """Look up the consistent colour for a model or optimizer key.
+    """The fixed colour for a model or optimizer key.
 
-    Falls back to a neutral grey for an unknown key rather than raising - a
-    missing colour should not abort a figure.
+    An unknown key gets a neutral grey rather than an error - a missing colour
+    should never abort a figure.
+
+    Raises:
+        ValueError: if ``kind`` is neither ``"model"`` nor ``"optimizer"``.
     """
-    raise NotImplementedError("Member 1: implement color_for")
+    palettes = {"model": MODEL_COLORS, "optimizer": OPTIMIZER_COLORS}
+    if kind not in palettes:
+        raise ValueError(f"kind must be 'model' or 'optimizer', not {kind!r}")
+    return palettes[kind].get(key, NEUTRAL_GREY)
 
 
 def annotate_hardware(fig: Figure, device: str, **kwargs: Any) -> None:
-    """Stamp the device string onto a timing-related figure.
+    """Stamp the device string in small grey text at the figure's bottom-right corner.
 
-    Section 4 requires the evaluation hardware to be reported, and a figure
-    that travels into a slide deck should carry its own provenance.
+    Timing figures should carry the hardware they were measured on, so they stay
+    meaningful when copied into slides or the report. Extra keyword arguments go
+    to ``Figure.text``.
     """
-    raise NotImplementedError("Member 1: implement annotate_hardware")
+    style = {"ha": "right", "va": "bottom", "fontsize": 7, "color": "#666666"}
+    style.update(kwargs)
+    fig.text(0.99, 0.01, device, **style)
