@@ -27,6 +27,13 @@ venv/
 env/
 ENV/
 
+# --- Local settings and secrets ---------------------------------------------
+# A .env may hold personal values or a token, and the repository is public.
+# .env.example is the committed template - see its header.
+.env
+.env.*
+!.env.example
+
 # --- Tooling caches ---------------------------------------------------------
 .pytest_cache/
 .mypy_cache/
