@@ -249,6 +249,7 @@ EN3150-Assignment-03-CNN/
 ├── README.md                  this file — split, seams, run matrix
 ├── CONTRIBUTING.md            the developer guide: setup, workflow, git, official runs
 ├── COLAB.md                   running notebooks on Colab's GPU: setup, handover, troubleshooting
+├── SUBMISSION.md              how the final code notebook is built, and what it must not contain
 ├── pyproject.toml             package `edgecnn`; the only reason to reinstall
 ├── notebooks/
 │   ├── 00_setup … 07_final_comparison.ipynb   one per section; the official drivers
