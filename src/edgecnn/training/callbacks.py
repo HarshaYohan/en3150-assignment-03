@@ -29,11 +29,45 @@ class EarlyStopping:
         min_delta: float = 0.0,
         min_epochs: int = 20,
     ) -> None:
-        raise NotImplementedError("Member 3: implement EarlyStopping.__init__")
+        if mode not in {"min", "max"}:
+            raise ValueError("mode must be either 'min' or 'max'")
+        if patience < 1:
+            raise ValueError("patience must be at least 1")
+        if min_delta < 0:
+            raise ValueError("min_delta cannot be negative")
+        if min_epochs < 1:
+            raise ValueError("min_epochs must be at least 1")
+
+        self.monitor = monitor
+        self.mode = mode
+        self.patience = patience
+        self.min_delta = min_delta
+        self.min_epochs = min_epochs
+        self.best: float | None = None
+        self.bad_epochs = 0
 
     def step(self, metrics: dict[str, float], epoch: int) -> bool:
         """Record this epoch's metrics; return True to stop training."""
-        raise NotImplementedError("Member 3: implement EarlyStopping.step")
+        if self.monitor not in metrics:
+            raise KeyError(f"Missing monitored metric: {self.monitor!r}")
+        if epoch < 1:
+            raise ValueError("epoch numbering must start at 1")
+
+        current = float(metrics[self.monitor])
+        if self.best is None:
+            improved = True
+        elif self.mode == "max":
+            improved = current > self.best + self.min_delta
+        else:
+            improved = current < self.best - self.min_delta
+
+        if improved:
+            self.best = current
+            self.bad_epochs = 0
+        else:
+            self.bad_epochs += 1
+
+        return epoch >= self.min_epochs and self.bad_epochs >= self.patience
 
 
 class CheckpointManager:
