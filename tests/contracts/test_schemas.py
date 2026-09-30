@@ -228,7 +228,7 @@ def test_committed_split_artifacts_are_valid_if_present() -> None:
     Skips until the data stage has been run and its outputs committed.
     """
     if not paths.SPLIT_META.exists():
-        pytest.skip("split not generated yet - run scripts/prepare_data.py")
+        pytest.skip("split not committed yet - run notebooks/01_data_preparation.ipynb in official mode")
 
     from edgecnn.contracts.schema import validate_manifest
 

@@ -1,26 +1,34 @@
 """Layered YAML configuration.
 
-Owner: Member 1. Consumed by every script and every member.
+Owner: Member 1. Consumed by every notebook and every member.
 
 The layering
 ------------
-A run's configuration is assembled from three files, each overriding the last::
+A run's configuration is assembled in four layers, each overriding the last::
 
-    configs/base.yaml              shared by everything: seed, device, paths
-        <- configs/stages/*.yaml   one per pipeline stage, declares inputs/outputs
-            <- configs/experiments/<name>.yaml   the specific run
+    configs/base.yaml              shared by everything: seed, device, paths, modes
+        <- configs/stages/*.yaml   one per pipeline stage (via the experiment's `extends`)
+            <- configs/experiments/<name>.yaml   what makes this run distinct
+                <- modes[<mode>]   the notebook's MODE preset, from base.yaml
 
-An experiment config names the stages it pulls in via a top-level ``extends``
-list, then overrides whatever it needs. That keeps the six experiment files
-short enough to read at a glance and means a change to, say, the augmentation
-policy happens in one place rather than six.
+An experiment names the stages it pulls in via a top-level ``extends`` list,
+then states only what makes it distinct - normally just the model and the
+optimizer. A change to, say, the augmentation policy happens in one place.
 
-Why stage configs declare their own inputs and outputs
-------------------------------------------------------
-Every ``configs/stages/*.yaml`` has explicit ``inputs:`` and ``outputs:``
-blocks. That is the seam made visible: you can see what a stage consumes and
-what it hands on without reading a line of Python, and the owner of the next
-stage downstream can read it without asking anyone.
+One home per setting
+--------------------
+Settings live in top-level sections (``dataset``, ``training``, ``optimizer``,
+...), and each section is defined in exactly one stage file. An experiment
+overrides a setting at the same path. Stage I/O declarations are kept apart
+under ``stages.<name>`` so they never collide when several stages merge.
+``tests/contracts/test_config_layout.py`` enforces both rules.
+
+Modes
+-----
+Notebooks call ``load_config(path, mode=MODE)``. The preset for that mode is
+read from ``base.yaml -> modes`` and applied as dotted overrides, e.g. debug
+mode sets ``subset_fraction: 0.05`` and ``training.epochs: 2``. Only
+``mode="official"`` can produce ``cfg.is_official == True``.
 """
 
 from __future__ import annotations
@@ -32,7 +40,7 @@ from typing import Any
 import yaml
 
 from edgecnn.contracts.paths import CONFIGS_DIR, REPO_ROOT, make_run_id
-from edgecnn.contracts.types import DEFAULT_SEED, ResolvedConfig
+from edgecnn.contracts.types import DEFAULT_SEED, RUN_MODES, ResolvedConfig
 
 
 class ConfigError(Exception):
@@ -71,7 +79,7 @@ def resolve_path(value: str | Path) -> Path:
     """Turn a repo-relative config path into an absolute one.
 
     Config files always spell paths relative to the repository root, so the
-    same YAML works from ``scripts/``, ``tests/`` and ``notebooks/`` without
+    same YAML works from ``notebooks/``, ``tests/`` or a Colab clone without
     anyone thinking about the current working directory.
     """
     path = Path(value)
@@ -83,18 +91,21 @@ def load_stage(name: str) -> dict[str, Any]:
     return _read_yaml(CONFIGS_DIR / "stages" / f"{name}.yaml")
 
 
-def load_config(path: str | Path, **overrides: Any) -> ResolvedConfig:
-    """Compose base + stages + experiment into a :class:`ResolvedConfig`.
+def load_config(path: str | Path, mode: str = "official", **overrides: Any) -> ResolvedConfig:
+    """Compose base + stages + experiment + mode preset into a :class:`ResolvedConfig`.
 
     Args:
         path: An experiment config, normally under ``configs/experiments/``.
-        **overrides: Last-word CLI overrides, e.g. ``seed=1``. Top-level keys
-            only; use a dotted path for nesting, e.g.
-            ``load_config(p, **{"training.epochs": 2})``.
+        mode: ``"synthetic"``, ``"debug"`` or ``"official"`` - the notebook's
+            ``MODE``. Applies the matching preset from ``base.yaml -> modes``.
+        **overrides: Last-word overrides, applied after the mode preset. Use a
+            dotted path for nesting: ``load_config(p, **{"training.epochs": 3})``.
+            An override can make a run unofficial but never official - see
+            ``ResolvedConfig.is_official``.
 
     Raises:
-        ConfigError: if a required key is missing, or if ``run_id`` is stated
-            in the file and disagrees with model/optimizer/seed - a mismatch
+        ConfigError: on an unknown mode, a missing required key, or a stated
+            ``run_id`` that disagrees with model/optimizer/seed - a mismatch
             there would scatter one run's artifacts across two directories.
     """
     experiment_path = resolve_path(path)
@@ -107,6 +118,16 @@ def load_config(path: str | Path, **overrides: Any) -> ResolvedConfig:
 
     config = merge(config, experiment)
     config.pop("extends", None)
+
+    presets = config.pop("modes", {}) or {}
+    if mode not in RUN_MODES or mode not in presets:
+        raise ConfigError(
+            f"unknown mode {mode!r}; expected one of {list(RUN_MODES)} "
+            f"(presets live in configs/base.yaml -> modes)"
+        )
+    for dotted, value in (presets[mode] or {}).items():
+        _set_dotted(config, dotted, value)
+    config["mode"] = mode
 
     for dotted, value in overrides.items():
         _set_dotted(config, dotted, value)
@@ -132,6 +153,7 @@ def load_config(path: str | Path, **overrides: Any) -> ResolvedConfig:
         optimizer_name=optimizer_name,
         seed=seed,
         device=str(config.get("device", "auto")),
+        mode=mode,
     )
 
 

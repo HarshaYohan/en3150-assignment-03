@@ -20,7 +20,7 @@
   "properties": {
     "dataset_name": {
       "type": "string",
-      "description": "e.g. 'eurosat'. Matches configs/stages/data.yaml inputs.dataset.name."
+      "description": "e.g. 'eurosat'. Matches dataset.name in configs/stages/data.yaml."
     },
     "dataset_source": {
       "type": "string",

@@ -7,6 +7,13 @@ owns the marking section they support - see curves.py and reporting.py.
 
 The point of a shared style module is that figures from three different people
 sit on facing pages of one report and should not look like three reports.
+
+Two resolutions, on purpose
+---------------------------
+Notebooks are committed WITH their outputs, and every inline figure is stored
+inside the .ipynb as an image. So inline figures render at ``INLINE_DPI``
+(small notebooks, readable diffs), while the PNG saved for the report is
+written at ``FIGURE_DPI``.
 """
 
 from __future__ import annotations
@@ -35,17 +42,21 @@ OPTIMIZER_COLORS: dict[str, str] = {
     "adam": "#DA8BC3",
 }
 
-#: Figures go into a printed report, so default DPI is print-quality.
+#: Inline (notebook) resolution - keeps committed notebooks small.
+INLINE_DPI: int = 100
+
+#: Saved-PNG resolution - figures go into a printed report.
 FIGURE_DPI: int = 200
 
 
 def apply_style() -> None:
-    """Set matplotlib rcParams once, at the top of any plotting script.
+    """Set matplotlib rcParams once, in each notebook's setup cell.
 
-    Font sizes should stay legible after the figure is scaled into a
-    two-column report - a default-sized axis label is usually unreadable at
-    half width. Prefer a white background and a light grid; a dark theme wastes
-    toner and reproduces badly in print.
+    Sets ``figure.dpi = INLINE_DPI`` and ``savefig.dpi = FIGURE_DPI``. Font
+    sizes should stay legible after the figure is scaled into a two-column
+    report - a default-sized axis label is usually unreadable at half width.
+    Prefer a white background and a light grid; a dark theme wastes toner and
+    reproduces badly in print.
     """
     raise NotImplementedError("Member 1: implement apply_style")
 
@@ -53,7 +64,8 @@ def apply_style() -> None:
 def save_figure(fig: Figure, path: Path, also_copy_to: Path | None = None) -> Path:
     """Save at FIGURE_DPI with a tight bounding box, creating parent dirs.
 
-    `also_copy_to` mirrors the figure into report/figures/, so the report
+    Called only for official outputs - the plotting functions decide that.
+    ``also_copy_to`` mirrors the figure into ``report/figures/``, so the report
     always pulls from one place.
     """
     raise NotImplementedError("Member 1: implement save_figure")

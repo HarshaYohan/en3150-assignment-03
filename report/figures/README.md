@@ -2,12 +2,10 @@
 
 **Do not put anything here by hand.**
 
-`scripts/build_report_assets.py` mirrors `results/figures/` into this folder. One source of truth
-means a figure in the report can never drift out of sync with the numbers in the tables beside it.
+Notebook [`07_final_comparison`](../../notebooks/07_final_comparison.ipynb) copies `results/figures/`
+into this folder with `export_report_figures(write=True)` during its official run. With one source of
+truth, a figure in the report can never drift out of sync with the numbers in the tables beside it.
 
-```powershell
-python scripts/build_report_assets.py
-```
-
-If a figure is missing, the run that produces it has not been committed yet — check
-`results/metrics/` for the corresponding `<run_id>`.
+If a figure is missing, the run that produces it has not been committed yet. Check
+`results/metrics/` for the corresponding `<run_id>`, and see which notebook produces it in
+[`results/figures/README.md`](../../results/figures/README.md).

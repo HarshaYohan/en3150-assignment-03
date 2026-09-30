@@ -1,13 +1,14 @@
 # `src/`
 
-Holds the `edgecnn` package. Nothing else goes here.
+Holds the `edgecnn` package — the shared library every notebook imports. Nothing else goes here.
 
-The package is installed in editable mode, so `import edgecnn` works from any directory — scripts,
-tests and notebooks alike:
+The package is installed in editable mode, so `import edgecnn` works from any notebook, from the
+tests, and from any directory, and your edits take effect immediately:
 
 ```powershell
 pip install -e ".[dev]"
 ```
 
-See [CONTRIBUTING.md](../CONTRIBUTING.md) for setup and the sync workflow, and
-[`edgecnn/README.md`](edgecnn/README.md) for what is inside.
+Notebooks *call* this code; they do not contain it. How code moves from a scratch notebook into
+here is in [CONTRIBUTING.md → the promote rule](../CONTRIBUTING.md#the-promote-rule). What is
+inside: [`edgecnn/README.md`](edgecnn/README.md).

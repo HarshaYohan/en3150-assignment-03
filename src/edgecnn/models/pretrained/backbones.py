@@ -1,13 +1,19 @@
 """Lightweight SOTA backbones, fine-tuned.        Assignment Section 5 [20]
 
-Owner: Member 4.
+Owner: Member 4.   Trained in notebooks/05_pretrained_finetuning.ipynb.
 
     +---------------------------------------------------------------------+
-    |  IN   num_classes, input_shape=(3,64,64), **overrides from           |
-    |       configs/stages/pretrained.yaml -> inputs.backbones[]           |
+    |  IN   num_classes, input_shape=(3,64,64), and as **overrides the     |
+    |       matching configs/stages/pretrained.yaml -> pretrained.backbones|
+    |       entry (torchvision_name, weights, finetune_strategy,           |
+    |       unfreeze_last_n, replace_classifier, dropout,                  |
+    |       backbone_lr_scale) plus input_resolution                       |
     |  OUT  nn.Module, forward -> (B, num_classes) RAW LOGITS              |
-    |       plus .param_groups() for discriminative learning rates         |
+    |       plus param_groups() for discriminative learning rates          |
     +---------------------------------------------------------------------+
+
+``build_model_from_config(cfg, num_classes)`` finds the right backbone entry
+and passes it in - never assemble the overrides by hand.
 
 Both models register into the SAME registry as Model A and Model B. Member 3's
 trainer and Member 1's benchmark code therefore need no special case for them,
@@ -56,7 +62,7 @@ def build_mobilenet_v2(
     and it explains any accuracy gap better than "pretrained models are
     better/worse" would.
 
-    Must expose ``param_groups()``; see :func:`param_groups`.
+    The optimizer splits its parameters with :func:`param_groups` below.
     """
     raise NotImplementedError("Member 4: implement MobileNetV2 fine-tuning")
 
@@ -88,15 +94,19 @@ def build_squeezenet(
 
 def param_groups(
     model: nn.Module,
-    lr_backbone: float,
-    lr_head: float,
+    base_lr: float,
+    backbone_lr_scale: float,
 ) -> list[dict[str, object]]:
     """Split parameters into backbone and head groups for the optimizer.
 
+    ``base_lr`` is the experiment's ``optimizer.lr`` and applies to the head;
+    the backbone gets ``base_lr * backbone_lr_scale``. Deriving one from the
+    other keeps the learning rate in one place - the experiment file.
+
     Returns something like::
 
-        [{"params": [...], "lr": lr_backbone, "name": "backbone"},
-         {"params": [...], "lr": lr_head,     "name": "head"}]
+        [{"params": [...], "lr": base_lr * backbone_lr_scale, "name": "backbone"},
+         {"params": [...], "lr": base_lr,                     "name": "head"}]
 
     Member 3's optimizer factory consumes this when present and falls back to
     a single group otherwise, so custom models need no equivalent.

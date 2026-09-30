@@ -1,28 +1,19 @@
 # ===========================================================================
 # STAGE 5 - SOTA FINE-TUNING                       Assignment Section 5 [20]
 #
-# Owner:        Member 4
-# Consumes:     SEAM 1 (the SAME splits as the custom models - required)
-# Produces for: Member 3 (trains them through the same Trainer),
-#               Member 1 (benchmarks them through the same benchmark code)
-# Code:         src/edgecnn/models/pretrained/
+# Owner:     Member 4
+# Notebook:  notebooks/05_pretrained_finetuning.ipynb
+# Code:      src/edgecnn/models/pretrained/
 #
-# Both backbones are taken from the list the assignment itself names.
-# They register into the SAME registry as Model A and Model B, so Member 3's
-# trainer and Member 1's evaluator need no special case for them. That is
-# what makes the Section 6 comparison fair.
+# Both backbones are taken from the list the assignment itself names. They
+# register into the SAME registry as Model A and Model B, so the trainer and
+# the benchmark need no special case for them. That is what makes the
+# Section 6 comparison fair.
 # ===========================================================================
 
-stage: pretrained
-owner: member_4
-produces_for: [member_3, member_1]
+# --- SETTINGS --------------------------------------------------------------
 
-# --- INPUTS ----------------------------------------------------------------
-inputs:
-  from_data_stage:
-    num_classes: 10
-    input_shape: [3, 64, 64]
-
+pretrained:
   # A DOCUMENTED DECISION, to be defended in Section 6:
   # the backbones are fine-tuned at 64x64, not upsampled to their native 224.
   # Upsampling would inflate MACs ~12x and measure the wrong thing - the point
@@ -32,17 +23,19 @@ inputs:
   # designed around. Set input_resolution: 128 to run that ablation.
   input_resolution: 64
 
+  # One entry per registry key. build_model_from_config passes the matching
+  # entry (minus registry_key) to the builder as keyword overrides.
   backbones:
     - registry_key: mobilenet_v2
       torchvision_name: mobilenet_v2
       weights: IMAGENET1K_V1
-      # full | head_only | last_n_blocks
-      finetune_strategy: last_n_blocks
+      finetune_strategy: last_n_blocks   # full | head_only | last_n_blocks
       unfreeze_last_n: 3
       replace_classifier: true
       dropout: 0.2
-      lr_backbone: 0.0001      # small LR on pretrained weights...
-      lr_head: 0.001           # ...larger on the freshly initialised head
+      # Backbone LR = optimizer.lr x this scale. optimizer.lr (set in the
+      # experiment file) is the head LR, so the learning rate has one home.
+      backbone_lr_scale: 0.1
 
     - registry_key: squeezenet1_1
       torchvision_name: squeezenet1_1
@@ -51,8 +44,7 @@ inputs:
       unfreeze_last_n: 2
       replace_classifier: true
       dropout: 0.5
-      lr_backbone: 0.0001
-      lr_head: 0.001
+      backbone_lr_scale: 0.1
 
   normalization:
     # ImageNet statistics match what the pretrained weights expect. Using them
@@ -62,29 +54,36 @@ inputs:
     imagenet_mean: [0.485, 0.456, 0.406]
     imagenet_std:  [0.229, 0.224, 0.225]
 
-# --- OUTPUTS ---------------------------------------------------------------
-outputs:
-  registry_keys: [mobilenet_v2, squeezenet1_1]
-  # Same layout as every other run - Member 1 and Member 3 need no special case.
-  checkpoint_best: artifacts/checkpoints/{run_id}/best.pt
-  history:         results/metrics/{run_id}/history.json
-  test_metrics:    results/metrics/{run_id}/test_metrics.json
-  resources:       results/metrics/{run_id}/resources.json
+# --- SEAM 2 declaration (pretrained half) ----------------------------------
 
-# --- CONTRACT --------------------------------------------------------------
-contract:
-  python_api: >-
-    registered into edgecnn.models.registry, identical signature to the
-    custom models: build_model(name, num_classes, input_shape, **overrides)
-  forward:
-    input:  {dtype: float32, shape: [B, 3, 64, 64]}
-    output: {dtype: float32, shape: [B, num_classes], semantics: raw_logits}
-  guarantees:
-    - "uses the SAME split_manifest.csv as the custom models - assignment requirement"
-    - "classifier head replaced so the output width is num_classes, not 1000"
-    - "returns raw logits, exactly like the custom models"
-    - "reports BOTH trainable_params and total_params - they differ when frozen"
-    - "trained by Member 3's Trainer, benchmarked by Member 1's benchmark code"
-  param_group_api: >-
-    exposes param_groups() -> list[dict] so the trainer can apply lr_backbone
-    and lr_head without knowing anything about the architecture
+stages:
+  pretrained:
+    owner: member_4
+    produces_for: [member_3, member_1]
+    settings: [pretrained]
+
+    inputs:
+      from_data: >-
+        num_classes and input_shape from the DataBundle - the SAME split as the
+        custom models (assignment requirement)
+
+    outputs:
+      registry_keys: [mobilenet_v2, squeezenet1_1]
+
+    contract:
+      python_api: >-
+        registered into edgecnn.models.registry with the same signature as the
+        custom models, so build_model_from_config(cfg, num_classes) works unchanged
+      forward:
+        input:  {dtype: float32, shape: [B, 3, 64, 64]}
+        output: {dtype: float32, shape: [B, num_classes], semantics: raw_logits}
+      guarantees:
+        - "uses the SAME split_manifest.csv as the custom models - assignment requirement"
+        - "classifier head replaced so the output width is num_classes, not 1000"
+        - "returns raw logits, exactly like the custom models"
+        - "reports BOTH trainable_params and total_params - they differ when frozen"
+        - "trained by Member 3's Trainer, benchmarked by Member 1's benchmark code"
+      param_group_api: >-
+        param_groups(model, base_lr, backbone_lr_scale) -> list[dict], so the
+        trainer can apply discriminative learning rates without knowing the
+        architecture

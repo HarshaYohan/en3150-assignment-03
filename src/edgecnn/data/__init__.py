@@ -11,13 +11,18 @@ Nobody downstream opens an image file, computes a normalisation statistic or
 decides which sample is in which split. They call this and read the bundle.
 """
 
+from edgecnn.data.inspect import plot_class_distribution, plot_sample_grid, split_counts_table
 from edgecnn.data.loaders import build_dataloaders
-from edgecnn.data.prepare import prepare_dataset, write_split_manifest
+from edgecnn.data.prepare import ensure_images_present, prepare_dataset, write_split_manifest
 from edgecnn.data.synthetic import make_synthetic_fixture
 
 __all__ = [
     "build_dataloaders",
+    "ensure_images_present",
     "prepare_dataset",
     "write_split_manifest",
     "make_synthetic_fixture",
+    "plot_class_distribution",
+    "plot_sample_grid",
+    "split_counts_table",
 ]

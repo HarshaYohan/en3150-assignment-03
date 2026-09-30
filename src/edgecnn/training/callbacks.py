@@ -40,9 +40,14 @@ class CheckpointManager:
     """Keeps `best.pt` and `last.pt` for one run.
 
     `best` is selected on validation accuracy, never on test accuracy - the
-    test split is not visible to training code at all. Member 1 evaluates
+    test split is not visible to training code at all. `evaluate_run` loads
     `best.pt`, so which epoch this picks directly determines the number that
     lands in the report.
+
+    Pass `official=cfg.is_official`. Unofficial (synthetic / debug) runs save
+    under `paths.checkpoint_dir(run_id, official=False)`, i.e.
+    `artifacts/checkpoints/_debug/<run_id>/`, so they can never overwrite the
+    checkpoint an official result came from.
     """
 
     def __init__(
@@ -51,6 +56,7 @@ class CheckpointManager:
         monitor: str = "val_acc",
         mode: str = "max",
         save_last: bool = True,
+        official: bool = True,
     ) -> None:
         raise NotImplementedError("Member 3: implement CheckpointManager.__init__")
 

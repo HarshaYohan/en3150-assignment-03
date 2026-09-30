@@ -2,50 +2,42 @@
 # STAGE 4 - EVALUATION, BENCHMARKING & REPORTING
 #                                    Assignment Sections 4 [25] + 6 [20]
 #
-# Owners:   Member 1 - metrics + resource benchmarking (SEAM 4 producer)
-#           Member 4 - aggregation into comparison tables (SEAM 5 producer)
-# Entry:    python scripts/evaluate.py           --config configs/experiments/<name>.yaml
-#           python scripts/build_report_assets.py --config configs/stages/evaluation.yaml
-# Code:     src/edgecnn/evaluation/
+# Owners:    Member 1 - metrics + resource benchmarking (SEAM 4 producer)
+#            Member 4 - aggregation into comparison tables (SEAM 5 producer)
+# Notebooks: test metrics - inline in 03, 04 and 05, right after training
+#            resources    - notebooks/06_resource_benchmark.ipynb (Member 1)
+#            tables       - notebooks/07_final_comparison.ipynb   (Member 4)
+# Code:      src/edgecnn/evaluation/
 #
 # Every model is scored by ONE code path. A comparison table assembled from
-# four differently-measured numbers cannot be defended in a viva.
+# four differently-measured numbers cannot be defended.
 # ===========================================================================
 
-stage: evaluation
-owner: member_1              # metrics + benchmark
-co_owner: member_4           # reporting + tables
+# --- SETTINGS --------------------------------------------------------------
 
-# --- INPUTS ----------------------------------------------------------------
-inputs:
-  checkpoint: artifacts/checkpoints/{run_id}/best.pt
-  data_split: test           # locked: headline numbers come from held-out data
-  history:    results/metrics/{run_id}/history.json
+metrics:
+  average: macro               # macro, not micro: micro-precision equals accuracy
+                               # for single-label classification, which would put
+                               # the same number in two columns of the table
+  include_per_class: true
+  confusion_matrix:
+    normalize: false           # store raw counts; normalise at plot time only
 
-  metrics:
-    average: macro           # macro, not micro: micro-precision equals accuracy
-                             # for single-label classification, which would put
-                             # the same number in two columns of the table
-    include_per_class: true
-    confusion_matrix:
-      normalize: false       # store raw counts; normalise at plot time only
+benchmark:
+  # Latency is measured on CPU for EVERY model, even on a CUDA machine. The
+  # Section 6 argument is about edge deployment, and edge devices have no GPU.
+  # Notebook 06 profiles all four architectures in ONE session on ONE machine.
+  latency_device: cpu
+  latency_batch_size: 1        # the batch size an edge device actually uses
+  latency_warmup: 10
+  latency_repeats: 100
+  count_macs: true             # via thop
+  measure_peak_memory: true
+  model_size_from: state_dict
 
-  benchmark:
-    # Latency is measured on CPU for EVERY model, including on a CUDA machine.
-    # The Section 6 argument is about edge deployment, and edge devices do not
-    # have a GPU. Mixing CPU and GPU timings would make the column meaningless.
-    latency_device: cpu
-    latency_batch_size: 1    # the batch size an edge device actually uses
-    latency_warmup: 10
-    latency_repeats: 100
-    count_macs: true         # via thop
-    measure_peak_memory: true
-    model_size_from: state_dict
-
-# --- Section 6 reporting ---------------------------------------------------
 reporting:
-  # Member 4 discovers runs from results/metrics/ rather than hard-coding them,
-  # so a run joins the tables as soon as its JSON is committed.
+  # Notebook 07 discovers runs from results/metrics/ rather than hard-coding
+  # them, so a run joins the tables as soon as its JSON is committed.
   discover_runs: true
   tables:
     - name: custom_model_comparison     # Section 4: Model A vs Model B
@@ -71,28 +63,39 @@ reporting:
     - accuracy_vs_macs_scatter
   export_to: report/figures
 
-# --- OUTPUTS ---------------------------------------------------------------
-outputs:
-  # Member 1, per run - COMMITTED
-  test_metrics: results/metrics/{run_id}/test_metrics.json
-  resources:    results/metrics/{run_id}/resources.json
-  # Member 4, across runs - COMMITTED
-  tables_dir:   results/tables
-  figures_dir:  results/figures
-  report_figures_dir: report/figures
+# --- SEAMS 4 and 5 declaration ---------------------------------------------
 
-# --- CONTRACT --------------------------------------------------------------
-contract:
-  python_api:
-    - "edgecnn.evaluation.metrics.compute_metrics(y_true, y_pred, class_names) -> EvalResult"
-    - "edgecnn.evaluation.benchmark.profile_model(model, input_shape, ...) -> ResourceProfile"
-    - "edgecnn.evaluation.reporting.build_tables() -> dict[str, Path]"
-  schemas:
-    test_metrics: configs/contracts/test_metrics.schema.json
-    resources:    configs/contracts/resources.schema.json
-  confusion_matrix_orientation: "cm[i][j] = true class i predicted as j"
-  guarantees:
-    - "every model is scored by the same compute_metrics call"
-    - "every model is profiled by the same profile_model call, on the same device"
-    - "class_names ordering matches split_meta.json exactly"
-    - "metrics JSON is committed so tables rebuild without re-running training"
+stages:
+  evaluation:
+    owner: member_1                     # metrics + benchmark
+    co_owner: member_4                  # reporting + tables
+    produces_for: [member_4]
+    settings: [metrics, benchmark, reporting]
+
+    inputs:
+      checkpoint: artifacts/checkpoints/{run_id}/best.pt
+      history:    results/metrics/{run_id}/history.json
+
+    # Per-run files are written only in official mode.
+    outputs:
+      test_metrics: results/metrics/{run_id}/test_metrics.json   # Member 1, COMMITTED
+      resources:    results/metrics/{run_id}/resources.json      # Member 1, COMMITTED
+      tables_dir:   results/tables                               # Member 4, COMMITTED
+      figures_dir:  results/figures                              # COMMITTED
+      report_figures_dir: report/figures
+
+    contract:
+      python_api:
+        - "edgecnn.evaluation.metrics.evaluate_run(cfg, data, checkpoint_path=None) -> EvalResult"
+        - "edgecnn.evaluation.benchmark.profile_all(run_ids, mode=...) -> dict[str, ResourceProfile]"
+        - "edgecnn.evaluation.reporting.build_final_comparison_table(write=...) -> str"
+      schemas:
+        test_metrics: configs/contracts/test_metrics.schema.json
+        resources:    configs/contracts/resources.schema.json
+      confusion_matrix_orientation: "cm[i][j] = true class i predicted as j"
+      guarantees:
+        - "headline numbers come from the held-out test split only"
+        - "every model is scored by the same compute_metrics call"
+        - "every model is profiled by the same profile_model call, in one session, on one CPU"
+        - "class_names ordering matches split_meta.json exactly"
+        - "metrics JSON is committed so tables rebuild without re-running training"

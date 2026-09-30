@@ -2,9 +2,12 @@
 
     custom/      Member 2 - Model A (standard CNN), Model B (<=100k params)
     pretrained/  Member 4 - MobileNetV2, SqueezeNet 1.1
-    registry.py  shared   - build_model(), the Seam 2 entry point
+    registry.py  shared   - the Seam 2 entry point
 
-Member 3 imports only ``build_model``. That is deliberate: see registry.py.
+Notebooks build every model the same way::
+
+    from edgecnn.models import build_model_from_config
+    model = build_model_from_config(cfg, num_classes=data.num_classes)
 """
 
 from edgecnn.models.registry import (
@@ -12,6 +15,9 @@ from edgecnn.models.registry import (
     ModelNotFound,
     available_models,
     build_model,
+    build_model_from_config,
+    model_input_shape,
+    model_settings,
     register,
 )
 
@@ -20,5 +26,8 @@ __all__ = [
     "ModelNotFound",
     "available_models",
     "build_model",
+    "build_model_from_config",
+    "model_input_shape",
+    "model_settings",
     "register",
 ]

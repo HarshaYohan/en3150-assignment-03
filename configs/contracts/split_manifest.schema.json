@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "edgecnn/split_manifest",
   "title": "Split manifest row",
-  "description": "SEAM 1. One row of data/splits/split_manifest.csv, the single source of truth for which image belongs to which split. Produced by Member 1 (scripts/prepare_data.py); consumed by Members 2, 3 and 4 through edgecnn.data.build_dataloaders. The CSV header itself is checked by edgecnn.contracts.schema.MANIFEST_COLUMNS; this document validates the values in each row.",
+  "description": "SEAM 1. One row of data/splits/split_manifest.csv, the single source of truth for which image belongs to which split. Produced by Member 1 (an official run of notebooks/01_data_preparation.ipynb); consumed by Members 2, 3 and 4 through edgecnn.data.build_dataloaders. The CSV header itself is checked by edgecnn.contracts.schema.MANIFEST_COLUMNS; this document validates the values in each row.",
   "type": "object",
   "required": ["relative_path", "label_index", "label_name", "split"],
   "additionalProperties": false,

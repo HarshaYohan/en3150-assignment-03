@@ -116,7 +116,7 @@ def test_dataloaders_honour_the_batch_contract() -> None:
 
     config_path = paths.CONFIGS_DIR / "experiments" / "model_b__adam.yaml"
     with pending("Member 1"):
-        cfg = load_config(config_path, **{"inputs.dataset.name": "synthetic"})
+        cfg = load_config(config_path, mode="synthetic")
         data = build_dataloaders(cfg)
         images, labels = next(iter(data.train))
 
@@ -135,7 +135,7 @@ def test_splits_are_disjoint() -> None:
     from edgecnn.contracts import paths
 
     if not paths.SPLIT_MANIFEST.exists():
-        pytest.skip("split not generated yet - run scripts/prepare_data.py")
+        pytest.skip("split not committed yet - run notebooks/01_data_preparation.ipynb in official mode")
 
     frame = pd.read_csv(paths.SPLIT_MANIFEST)
     groups = {name: set(g["relative_path"]) for name, g in frame.groupby("split")}
@@ -152,10 +152,55 @@ def test_split_proportions_match_the_assignment() -> None:
     from edgecnn.contracts.types import SPLIT_FRACTIONS
 
     if not paths.SPLIT_MANIFEST.exists():
-        pytest.skip("split not generated yet - run scripts/prepare_data.py")
+        pytest.skip("split not committed yet - run notebooks/01_data_preparation.ipynb in official mode")
 
     frame = pd.read_csv(paths.SPLIT_MANIFEST)
     total = len(frame)
     for split, expected in SPLIT_FRACTIONS.items():
         actual = (frame["split"] == split).sum() / total
         assert abs(actual - expected) < 0.01, f"{split}: {actual:.3f} vs expected {expected}"
+
+
+# --- SEAM 2: seeding and config-driven construction ------------------------
+
+
+@pytest.mark.parametrize(
+    ("name", "owner"),
+    [("model_a", "Member 2"), ("model_b", "Member 2")],
+)
+def test_same_seed_gives_identical_initial_weights(name: str, owner: str) -> None:
+    """The Section 3 runs must start from the same weights whatever ran before."""
+    from edgecnn.models.registry import build_model
+
+    with pending(owner):
+        first = build_model(name, num_classes=10, input_shape=INPUT_SHAPE, seed=42)
+        torch.randn(1000)  # disturb the global RNG, as an earlier notebook cell would
+        second = build_model(name, num_classes=10, input_shape=INPUT_SHAPE, seed=42)
+
+    for (key, a), (_, b) in zip(first.state_dict().items(), second.state_dict().items()):
+        assert torch.equal(a, b), f"{name}: parameter {key} differs between two seed=42 builds"
+
+
+@pytest.mark.parametrize(
+    ("experiment", "owner"),
+    [
+        ("model_a__adam", "Member 2"),
+        ("model_b__adam", "Member 2"),
+        ("mobilenet_v2__adam", "Member 4"),
+        ("squeezenet1_1__adam", "Member 4"),
+    ],
+)
+def test_every_experiment_builds_from_its_config(experiment: str, owner: str) -> None:
+    """The one construction path used by notebooks 02-06 works for all four models."""
+    from edgecnn.config.loader import load_config
+    from edgecnn.contracts import paths
+    from edgecnn.models.registry import build_model_from_config, model_input_shape
+
+    cfg = load_config(paths.CONFIGS_DIR / "experiments" / f"{experiment}.yaml")
+    with pending(owner):
+        model = build_model_from_config(cfg, num_classes=10)
+        model.eval()
+        with torch.no_grad():
+            out = model(torch.randn(1, *model_input_shape(cfg)))
+
+    assert out.shape == (1, 10)

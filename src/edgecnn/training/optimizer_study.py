@@ -2,18 +2,22 @@
 
 Owner: Member 3.
 
+The study itself is *run* in notebooks/03_optimizer_study.ipynb, one visible
+block per optimizer, so each run's curves can be inspected before the next
+starts. The experiments it trains are listed in one place,
+``configs/stages/training.yaml -> optimizer_study.experiments``, and their
+hyperparameters live in those experiment files.
+
     +---------------------------------------------------------------------+
-    |  IN   configs/stages/training.yaml -> optimizer_study                |
-    |  OUT  three runs, identical except for the optimizer:                |
-    |         results/metrics/model_b__sgd__seed42/history.json            |
-    |         results/metrics/model_b__sgd_momentum__seed42/history.json   |
-    |         results/metrics/model_b__adam__seed42/history.json           |
-    |       + results/figures/optimizer_overlay.png                        |
+    |  IN   the three TrainResults from notebook 03                       |
+    |  OUT  a summary for the Section 3 discussion; the committed table   |
+    |       is built from the committed JSON by notebook 07               |
     +---------------------------------------------------------------------+
 
-The experiment only isolates the optimizer if everything else is held fixed:
+The comparison only isolates the optimizer if everything else is held fixed:
 same seed, same initial weights, same data order, same scheduler, same epochs.
-Change two things and the report cannot attribute the difference to either.
+``build_model_from_config`` and ``Trainer.fit`` both seed from ``cfg.seed``,
+so running the three blocks in any order gives the same three results.
 """
 
 from __future__ import annotations
@@ -21,25 +25,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from edgecnn.contracts.types import ResolvedConfig, TrainResult
-
-
-def run_optimizer_study(cfg: ResolvedConfig) -> dict[str, TrainResult]:
-    """Train the same model under each optimizer variant.
-
-    Returns:
-        ``{optimizer_name: TrainResult}``.
-
-    Reseed before EACH variant, not once at the start. Otherwise the second
-    and third runs inherit a different RNG state and therefore different
-    initial weights, and the comparison silently measures initialisation
-    variance alongside the optimizer.
-    """
-    raise NotImplementedError("Member 3: implement run_optimizer_study")
+    from edgecnn.contracts.types import TrainResult
 
 
 def summarize_study(results: dict[str, TrainResult]) -> dict[str, Any]:
-    """Reduce the three runs to the Section 3 comparison table.
+    """Reduce the three runs to the Section 3 comparison.
+
+    Args:
+        results: ``{optimizer_name: TrainResult}`` - from the notebook in any
+            mode, so the summary can be inspected during debug runs too.
 
     Report convergence AND final performance - the assignment asks about both,
     and they can disagree. Suggested columns:

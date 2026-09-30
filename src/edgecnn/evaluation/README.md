@@ -1,71 +1,79 @@
 # `evaluation/` — SEAM 4 and SEAM 5
 
-**Two owners, no shared files.** Ownership follows the marking sections, so each member defends
+**Three owners, no shared files.** Ownership follows the marking sections, so each member defends
 their own marks.
 
-| File | Owner | Section |
-|---|---|---|
-| `metrics.py` | Member 1 | §4 — accuracy, precision, recall, confusion matrix |
-| `benchmark.py` | Member 1 | §4, §6 — params, size, MACs, latency, peak memory |
-| `plotting.py` | Member 1 | shared figure style only |
-| `curves.py` | Member 3 | §4 loss curves, §3 optimizer overlay |
-| `reporting.py` | Member 4 | §4, §5, §6 tables and comparison figures |
+| File | Owner | Section | Where it runs |
+|---|---|---|---|
+| `metrics.py` | Member 1 | §4 — accuracy, precision, recall, confusion matrix | inline in `03`, `04`, `05`, right after training |
+| `benchmark.py` | Member 1 | §4, §6 — params, size, MACs, latency, peak memory | notebook `06`, one session on one CPU |
+| `plotting.py` | Member 1 | shared figure style only | every notebook's style cell |
+| `curves.py` | Member 3 | §4 loss curves, §3 optimizer overlay | `03`, `04`, `05` |
+| `reporting.py` | Member 4 | §3/§4/§6 tables, confusion matrices, trade-off plots | `04`, `05`, `07` |
+
+## Every function returns, and writes only when told to
+
+- Functions for a single run follow `cfg.is_official`: `evaluate_run` writes `test_metrics.json` only
+  for an official run, and always returns an `EvalResult`.
+- Plot and table functions take an explicit `write=`. Notebooks pass `write=cfg.is_official` for a
+  single run, or `write = (MODE == "official")` in `07`. Every one **returns** its Figure or
+  Markdown, so a debug run shows everything inline.
+- Plot functions accept either a `run_id` (reading committed JSON) or a result still in memory.
 
 ## Seam 4 — Member 1 produces, Member 4 consumes
 
-**Inputs:** `artifacts/checkpoints/<run_id>/best.pt`, `DataBundle.test`,
-`results/metrics/<run_id>/history.json`
+**Inputs:** the best checkpoint (`TrainResult.checkpoint_path`), `DataBundle.test`, and each run's
+experiment config and `history.json`.
+**Outputs (official runs, committed):**
 
-**Outputs (both committed):**
-
-- `results/metrics/<run_id>/test_metrics.json`
-- `results/metrics/<run_id>/resources.json`
+- `results/metrics/<run_id>/test_metrics.json` — from `evaluate_run`, in `03`–`05`;
+- `results/metrics/<run_id>/resources.json` — from `profile_all`, in `06`.
 
 ## Seam 5 — Member 4 produces
 
-**Inputs:** every committed JSON under `results/metrics/`
-**Outputs:** `results/tables/*.md`, `results/figures/*.png`, mirrored into `report/figures/`
+**Inputs:** the committed JSON under `results/metrics/`.
+**Outputs:** `results/tables/*.md` and `results/figures/*.png`, mirrored into `report/figures/`.
+
+## Why resources are measured separately, in one session
+
+Latency and peak memory depend on the machine, but **not on trained weights**: an architecture costs
+the same with random weights as with trained ones. So notebook `06` builds all four architectures
+with `build_model_from_config` and profiles them one after another, on one CPU. It needs no
+checkpoints, and every row of the §6 table is measured on the same hardware, whoever trained which
+model where. Test accuracy does not depend on hardware, so it is computed inline, straight after
+training.
+
+Epoch time is the one hardware-dependent number that comes from training. `check_same_hardware` in
+`07` warns when a table mixes devices.
 
 ## Why one owner for the metrics
 
-Four implementations of "precision" will differ in averaging, in zero-division handling, and in
-class ordering. The §6 table would then compare numbers that are not comparable — and the error is
-invisible, because every column still looks plausible. One code path removes the possibility.
-
-The same applies to `benchmark.py`: every model is profiled by the same `profile_model` call, on
-the same device, or the comparison is not a comparison.
+Four implementations of "precision" differ in averaging, zero-division handling and class ordering.
+The §6 table would then compare numbers that are not comparable, and the error would be invisible,
+because every column still looks plausible. One code path removes that risk.
 
 ## Fixed conventions
 
-**Confusion matrix orientation.** `cm[i][j]` = true class `i` predicted as `j`. Rows sum to each
-class's support. Stored as raw counts; normalise at plot time only, by **true class**, so the
-diagonal reads as per-class recall.
-
-**Macro averaging.** For single-label classification, micro-precision is numerically equal to
-accuracy — a micro column would silently duplicate the accuracy column.
-
-**Latency on CPU, batch size 1, for every model** — even on a CUDA machine. The §6 argument is
-about edge deployment, and edge devices have no GPU. Mixing CPU and GPU timings makes the column
-meaningless.
-
-**Units.** `model_size_kb` is always KB. Convert to MB for the §5 table only. The schema fixes the
-unit so a KB/MB mix-up cannot reach §6, where it would make the argument wrong rather than merely
-imprecise.
+- **Confusion matrix orientation:** `cm[i][j]` = true class `i` predicted as `j`. Stored as raw
+  counts; normalised at plot time only, by **true class**, so the diagonal reads as per-class recall.
+- **Macro averaging.** For single-label classification, micro-precision equals accuracy, so a micro
+  column would silently repeat the accuracy column.
+- **Latency on CPU, batch size 1, for every model** — the §6 argument is about edge devices.
+- **Units.** `model_size_kb` is always KB; convert to MB only for the §5 table.
+- **Figure resolution.** Inline figures at `INLINE_DPI` keep committed notebooks small; saved PNGs
+  use `FIGURE_DPI`, for print.
 
 ## Traps
 
-- `thop.profile` attaches `total_ops` buffers to the model. Profile a `deepcopy`, or those buffers
-  end up in the checkpoint and inflate `model_size_kb`.
+- `thop.profile` attaches `total_ops` buffers to the model. Profile a `deepcopy`, or the extra buffers
+  inflate `model_size_kb`.
 - Measure `model_size_kb` by serialising the `state_dict`, not as `numel * 4`. The computed figure
-  misses buffers such as BatchNorm running statistics, which are real bytes on the device.
-- Pass `labels=range(len(class_names))` to `sklearn.confusion_matrix`. Without it a class absent
-  from the predictions vanishes and the matrix stops being square — which breaks the plot far from
-  the cause.
-- Cast NumPy scalars to plain `int`/`float` before serialising.
-- thop reports **MACs**; many papers report FLOPs at roughly `2 x MACs`. State which you used, or
-  the comparison against published MobileNet figures looks wrong by a factor of two.
+  misses buffers such as BatchNorm running statistics, which take real bytes on the device.
+- Pass `labels=range(len(class_names))` to `sklearn.confusion_matrix`. Otherwise a class absent from
+  the predictions disappears and the matrix stops being square.
+- thop reports **MACs**, while many papers report FLOPs, roughly `2 × MACs`. Say which you used.
 
 ## Sanity check worth asserting
 
-The confusion matrix must sum to `split_meta.json -> counts.test`. If it does not, the wrong split
-was evaluated — much better caught here than in the viva.
+The confusion matrix must sum to `split_meta.json → counts.test`. If it does not, the wrong split was
+evaluated.

@@ -8,6 +8,7 @@ so nothing outside this package should import these modules by name.
 """
 
 from edgecnn.models.custom import model_a, model_b  # noqa: F401  (registration side effect)
+from edgecnn.models.custom.summary import architecture_tables, layer_table
 from edgecnn.models.custom.blocks import (
     conv_bn_act,
     count_parameters,
@@ -16,6 +17,8 @@ from edgecnn.models.custom.blocks import (
 )
 
 __all__ = [
+    "architecture_tables",
+    "layer_table",
     "conv_bn_act",
     "count_parameters",
     "depthwise_separable_conv",

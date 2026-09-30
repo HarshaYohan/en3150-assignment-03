@@ -1,25 +1,25 @@
 # `artifacts/checkpoints/` — trained weights
 
-**Git-ignored** (except this file). Producer: Member 3. Consumer: Member 1.
+**Git-ignored** (except this file). Producer: the `Trainer`, in notebooks `03`, `04` and `05`.
+Consumer: `evaluate_run`, in the same notebooks.
 
 ```
-artifacts/checkpoints/<run_id>/best.pt     highest validation accuracy — this is what gets evaluated
-artifacts/checkpoints/<run_id>/last.pt     final epoch — for resuming an interrupted run
+artifacts/checkpoints/<run_id>/best.pt           official runs - the checkpoint that is evaluated
+artifacts/checkpoints/<run_id>/last.pt           official runs - for resuming an interrupted run
+artifacts/checkpoints/_debug/<run_id>/*.pt       synthetic and debug runs - never mixed with official
 ```
 
-Required keys in every checkpoint, asserted by `tests/contracts/`:
+Required keys in every checkpoint, checked by `tests/contracts/`:
 
 ```
 model_name, state_dict, epoch, val_acc, class_names, input_shape, seed, config_snapshot
 ```
 
-`class_names` and `input_shape` are mandatory so a checkpoint is **self-describing** — Member 1 can
-evaluate it without re-reading the config that produced it.
+`class_names` and `input_shape` are mandatory so that a checkpoint **describes itself**.
 
-`best` is selected on **validation** accuracy, never test.
+`best` is chosen by **validation** accuracy, never test accuracy.
 
-Regenerate rather than share:
+To resume an interrupted official run, set `training.resume: true` — as an override, for example
+`load_config(path, mode=MODE, **{"training.resume": True})` — and re-run the training cell.
 
-```powershell
-python scripts/train.py --config configs/experiments/model_b__adam.yaml
-```
+Never share or commit checkpoints. To get one back, re-run the notebook.

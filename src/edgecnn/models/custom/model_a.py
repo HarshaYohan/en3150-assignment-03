@@ -1,12 +1,17 @@
 """Model A - standard CNN baseline.                  Assignment Section 2 [20]
 
-Owner: Member 2.
+Owner: Member 2.   Exercised in notebooks/02_custom_architectures.ipynb,
+trained in notebooks/04_custom_training_evaluation.ipynb.
 
     +---------------------------------------------------------------------+
-    |  IN   num_classes, input_shape=(3,64,64), **overrides from           |
-    |       configs/stages/models.yaml -> inputs.model_a                   |
+    |  IN   num_classes, input_shape=(3,64,64), and as **overrides the     |
+    |       keys of configs/stages/models.yaml -> model_a                  |
+    |       (blocks, head, activation, batch_norm)                         |
     |  OUT  nn.Module, forward -> (B, num_classes) RAW LOGITS              |
     +---------------------------------------------------------------------+
+
+Call it through ``build_model_from_config(cfg, num_classes)``, which passes the
+``model_a`` section as the overrides - never assemble them by hand.
 
 Role in the report: this is the *control*. Model B's parameter and MAC savings
 are only meaningful relative to a standard convolutional network trained on

@@ -9,21 +9,21 @@ this file they wait. With it, they do not: it satisfies the full Seam 1
 contract - same shapes, same dtypes, same manifest columns, same DataBundle -
 using generated noise instead of satellite imagery.
 
-So Member 3 can run a complete 20-epoch training loop, write a schema-valid
-``history.json`` and debug their checkpointing on day one, before EuroSAT has
-finished downloading on anyone's machine.
+So Member 3 can run a complete training loop in notebook 03 and debug their
+checkpointing on day one, before EuroSAT has finished downloading anywhere.
 
 It is deliberately tiny (a few hundred 64x64 images, 4 classes) so a full run
 takes seconds on a CPU.
 
-    Activate it by setting, in any config:
+    Select it in any notebook with:
 
-        inputs:
-          dataset:
-            name: synthetic
+        MODE = "synthetic"
 
-Results produced from synthetic data must NEVER be committed to
-``results/metrics/``. Class structure is faked, so accuracy is meaningless.
+    which makes load_config(..., mode=MODE) set dataset.name = "synthetic".
+
+The fixture is generated on demand into ``paths.SYNTHETIC_FIXTURE_DIR`` and is
+git-ignored: it is deterministic, so regenerating is cheaper than committing.
+Synthetic runs are never official, so nothing from them can reach ``results/``.
 """
 
 from __future__ import annotations

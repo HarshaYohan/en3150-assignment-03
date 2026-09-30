@@ -14,14 +14,26 @@ branch per architecture, and the four models would drift apart in ways that
 make the Section 6 table impossible to defend - different loss reductions,
 different eval-mode handling, different timing points.
 
-So the trainer knows exactly one thing: ``build_model(name, ...)``. Members 2
-and 4 register builders; the trainer never learns which is which.
+So training code knows exactly one thing: the registry. Members 2 and 4
+register builders; the trainer never learns which is which.
+
+How notebooks build a model
+---------------------------
+Always through :func:`build_model_from_config`::
+
+    model = build_model_from_config(cfg, num_classes=data.num_classes)
+
+It finds the model's settings in the config, seeds, and builds. Notebook 03
+(training) and notebook 06 (benchmarking) therefore build the exact same
+architecture from the exact same settings - hand-assembling the overrides in a
+notebook cell is how the trained model and the profiled model would drift.
 
     +---------------------------------------------------------------------+
     |  IN   name         registry key, e.g. "model_b"                      |
     |       num_classes  from DataBundle.num_classes                       |
-    |       input_shape  from DataBundle.input_shape, i.e. (3, 64, 64)     |
-    |       **overrides  architecture knobs from configs/stages/models.yaml|
+    |       input_shape  (3, 64, 64); pretrained.input_resolution for SOTA |
+    |       seed         weight-init seed, normally cfg.seed               |
+    |       **overrides  the model's settings section of the config        |
     |                                                                      |
     |  OUT  torch.nn.Module satisfying contracts.protocols.ClassifierModel |
     |       forward: (B,3,64,64) float32 -> (B,num_classes) float32 LOGITS |
@@ -30,17 +42,19 @@ and 4 register builders; the trainer never learns which is which.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
     from torch import nn
+
+    from edgecnn.contracts.types import ResolvedConfig
 
 #: Registry key -> builder. Populated by the ``@register`` decorator when
 #: ``edgecnn.models.custom`` and ``edgecnn.models.pretrained`` are imported.
 _REGISTRY: dict[str, Callable[..., nn.Module]] = {}
 
-#: Keys the assignment requires. Checked by tests/contracts/test_registry.py so
-#: a missing model is a red test, not a surprise during report week.
+#: Keys the assignment requires. Checked by tests/contracts/test_seams.py so a
+#: missing model is a red test, not a surprise during report week.
 REQUIRED_KEYS: tuple[str, ...] = (
     "model_a",         # Member 2 - Section 2 standard CNN
     "model_b",         # Member 2 - Section 2 depthwise-separable, <=100k params
@@ -83,13 +97,22 @@ def build_model(
     name: str,
     num_classes: int,
     input_shape: tuple[int, int, int] = (3, 64, 64),
-    **overrides: object,
+    *,
+    seed: int | None = None,
+    **overrides: Any,
 ) -> nn.Module:
-    """Construct a registered model. The only way Member 3 gets a model.
+    """Construct a registered model.
 
     Every returned module must satisfy
     :class:`edgecnn.contracts.protocols.ClassifierModel`: raw logits out, no
     softmax, ``.num_classes`` exposed.
+
+    Args:
+        seed: If given, torch's RNG is seeded immediately before construction,
+            so the initial weights are identical no matter which notebook cells
+            ran earlier. The three Section 3 optimizer runs rely on this to start
+            from the same weights - otherwise the comparison measures
+            initialisation noise as well as the optimizer.
 
     Raises:
         ModelNotFound: listing the available keys, so a typo in a config is a
@@ -100,7 +123,65 @@ def build_model(
         raise ModelNotFound(
             f"no model registered as {name!r}. Available: {sorted(_REGISTRY)}"
         )
+    if seed is not None:
+        import torch
+
+        torch.manual_seed(seed)  # weight init draws only from torch's RNG
     return _REGISTRY[name](num_classes=num_classes, input_shape=input_shape, **overrides)
+
+
+def model_settings(cfg: ResolvedConfig, name: str | None = None) -> dict[str, Any]:
+    """The settings section for a model, as builder keyword overrides.
+
+    * custom models   -> ``cfg.section("model_a")`` / ``cfg.section("model_b")``
+    * pretrained ones -> the ``pretrained.backbones`` entry whose
+      ``registry_key`` matches, minus that key, plus ``input_resolution``
+
+    Returns an empty dict when a model has no settings section.
+    """
+    name = name or cfg.model_name
+    pretrained = cfg.section("pretrained")
+    for entry in pretrained.get("backbones", []) or []:
+        if entry.get("registry_key") == name:
+            settings = {k: v for k, v in entry.items() if k != "registry_key"}
+            settings["input_resolution"] = pretrained.get("input_resolution", 64)
+            return settings
+    return dict(cfg.section(name))
+
+
+def model_input_shape(cfg: ResolvedConfig, name: str | None = None) -> tuple[int, int, int]:
+    """(C, H, W) this model is fed. 64x64 unless a pretrained ablation raises it."""
+    name = name or cfg.model_name
+    channels = int(cfg.raw.get("channels", 3))
+    height, width = cfg.raw.get("image_size", [64, 64])
+    is_pretrained = any(
+        entry.get("registry_key") == name
+        for entry in cfg.section("pretrained").get("backbones", []) or []
+    )
+    if is_pretrained:
+        resolution = int(cfg.section("pretrained").get("input_resolution", height))
+        return (channels, resolution, resolution)
+    return (channels, int(height), int(width))
+
+
+def build_model_from_config(cfg: ResolvedConfig, num_classes: int) -> nn.Module:
+    """Build ``cfg.model_name`` with its settings, input shape and seed from ``cfg``.
+
+    The one way notebooks and library code build a model. Using it everywhere
+    guarantees the model trained in 03/04/05 and the model profiled in 06 are
+    the same architecture built from the same settings.
+
+    Args:
+        num_classes: from ``DataBundle.num_classes`` when data is loaded, or
+            ``split_meta.json -> num_classes`` when it is not (notebook 06).
+    """
+    return build_model(
+        cfg.model_name,
+        num_classes=num_classes,
+        input_shape=model_input_shape(cfg),
+        seed=cfg.seed,
+        **model_settings(cfg),
+    )
 
 
 def available_models() -> list[str]:

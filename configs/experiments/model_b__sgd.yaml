@@ -1,7 +1,7 @@
-# Run: model_b__sgd__seed42
+# Run: model_b__sgd__seed42                       Owner: Member 3
+# Notebook: notebooks/03_optimizer_study.ipynb
 # Section 3 baseline (a): plain SGD, no momentum.
 # Identical to model_b__adam in every respect except the optimizer.
-# Owner: Member 3.
 extends: [data, models, training, evaluation]
 
 model:
@@ -12,9 +12,6 @@ optimizer:
   lr: 0.01
   momentum: 0.0
   weight_decay: 0.0001
-
-training:
-  epochs: 30
 
 notes: >-
   Expect slower convergence and a noisier validation curve. The LR is 10x the

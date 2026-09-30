@@ -2,7 +2,8 @@
 # EN3150 A03 - what stays out of the repository
 #
 # Rule of thumb: anything that can be REGENERATED from code + config is
-# ignored, EXCEPT results/metrics, results/figures and results/tables.
+# ignored, EXCEPT results/metrics, results/figures and results/tables - and
+# the notebooks, which are committed WITH their outputs.
 # Those are committed on purpose - Member 4 cannot build the Section 6
 # comparison table without every other member's metrics JSON, and nobody
 # should have to re-run 20 epochs of training just to redraw a table.
@@ -46,7 +47,8 @@ data/processed/**
 !data/splits/*.json
 !data/splits/README.md
 
-# --- Model weights (too large for git; regenerate with scripts/train.py) -----
+# --- Model weights (too large for git; regenerate by re-running the notebook) -
+# Includes artifacts/checkpoints/_debug/, where synthetic and debug runs save.
 artifacts/checkpoints/**
 artifacts/exports/**
 !artifacts/checkpoints/README.md
@@ -56,6 +58,10 @@ artifacts/exports/**
 *.onnx
 *.tflite
 !tests/fixtures/**/*.pt
+
+# --- Synthetic fixture (generated on demand by MODE = "synthetic") -----------
+# Deterministic, so regenerating it is cheaper than committing it.
+tests/fixtures/synthetic/
 
 # --- Editors / OS -----------------------------------------------------------
 .vscode/

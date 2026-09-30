@@ -1,17 +1,24 @@
 """SEAM 4 - resource profiling.          Assignment Sections 4 [25] + 6 [20]
 
-Owner: Member 1.  Used for EVERY model.
+Owner: Member 1.  Used for EVERY model, from notebooks/06_resource_benchmark.ipynb.
 
     +---------------------------------------------------------------------+
-    |  IN   model : nn.Module                                              |
-    |       input_shape : (3, 64, 64)                                      |
+    |  IN   run_ids + their experiment configs (architecture only)        |
     |       history.json  (for mean_epoch_time_s)                          |
-    |  OUT  ResourceProfile -> results/metrics/<run_id>/resources.json     |
+    |  OUT  ResourceProfile per run - always returned                      |
+    |       -> results/metrics/<run_id>/resources.json   (official only)   |
     +---------------------------------------------------------------------+
 
 This module produces the cost side of the accuracy/memory/compute trade-off
 that Section 6 is entirely about. Every number here must come from one code
 path, run on one device, or the comparison is not a comparison.
+
+Why a separate notebook, in one session: latency and peak memory depend on
+the machine, but NOT on trained weights - an architecture costs the same with
+random weights as with trained ones. So notebook 06 builds all four
+architectures fresh and profiles them back to back on one CPU. No checkpoints
+are needed, and every row of the Section 6 table was measured on the same
+hardware, whoever trained which model where.
 """
 
 from __future__ import annotations
@@ -108,3 +115,31 @@ def measure_model_size_kb(model: nn.Module) -> float:
     than merely imprecise.
     """
     raise NotImplementedError("Member 1: implement measure_model_size_kb")
+
+
+def profile_all(
+    run_ids: list[str],
+    *,
+    mode: str = "official",
+    latency_device: str = "cpu",
+) -> dict[str, ResourceProfile]:
+    """Profile every run's architecture in ONE session - notebook 06.
+
+    For each ``run_id``:
+
+    1. ``cfg = load_config(paths.experiment_config(run_id), mode=mode)``
+    2. ``model = build_model_from_config(cfg, num_classes)`` - the same builder
+       and settings the training notebook used, so the profiled model is the
+       trained architecture. ``num_classes`` comes from ``split_meta.json``.
+    3. :func:`profile_model` on ``latency_device``; ``mean_epoch_time_s`` is
+       copied from that run's ``history.json`` when it exists.
+    4. Only if ``cfg.is_official``: write ``resources.json`` through
+       ``schema.write_json``.
+
+    Runs that share an architecture (the three ``model_b`` optimizer runs)
+    may reuse one measurement - only their epoch times differ.
+
+    Returns:
+        ``{run_id: ResourceProfile}`` in every mode, for display in the notebook.
+    """
+    raise NotImplementedError("Member 1: implement profile_all")
