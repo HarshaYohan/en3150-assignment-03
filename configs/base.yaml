@@ -49,9 +49,12 @@ subset_fraction: 1.0
 # --- DataLoader defaults ---------------------------------------------------
 dataloader:
   batch_size: 64
-  num_workers: 4             # capped at the machine's CPU count by the loader
-  pin_memory: true
-  persistent_workers: true
+  # Images are decoded once and served from memory (see edgecnn/data/cache.py),
+  # so worker processes would only add start-up time and RAM - each one is a
+  # separate Python process on Windows. Capped at the CPU count if raised.
+  num_workers: 0
+  pin_memory: true           # only takes effect when a GPU is present
+  persistent_workers: true   # only used when num_workers > 0
   drop_last: false
 
 # --- Logging ---------------------------------------------------------------
