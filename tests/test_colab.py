@@ -2,7 +2,7 @@
 
 git is replaced by a recording fake, so these run anywhere - no Colab, no
 network, no repository changes. The real Colab path is verified once by
-Member 1 in Phase 0 (see notebooks/README.md).
+Member 1 in Phase 0 (see COLAB.md).
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from dataclasses import dataclass
 import pytest
 
 from edgecnn.contracts import paths
-from edgecnn.utils.colab import TOKEN_ENV, push_results
+from edgecnn.utils.colab import TOKEN_ENV, in_colab, push_results
 
 TOKEN = "github_pat_TESTTOKEN0123456789abcdefghij"
 
@@ -116,3 +116,16 @@ def test_missing_token_fails_with_a_helpful_message(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr("edgecnn.utils.colab.colab_secret", lambda name: None)
     with pytest.raises(RuntimeError, match="GH_TOKEN"):
         push_results(["results"], "msg", runner=FakeGit())
+
+
+def test_pull_autostashes_other_edits() -> None:
+    """A stray edit in the Colab copy must not block pushing the results."""
+    fake = FakeGit()
+    _push(fake)
+    pull = next(command for command, _ in fake.calls if "pull" in command)
+    assert "--rebase" in pull and "--autostash" in pull
+
+
+def test_in_colab_is_false_on_this_machine() -> None:
+    """Checks the installed package, so it is False locally and True on any Colab runtime."""
+    assert in_colab() is False

@@ -5,8 +5,8 @@ Owner: Member 1.
 Notebooks run locally. When a laptop is too slow for a run, a member opens the
 same notebook in Colab: cell 1 clones and installs the repository there, and
 the notebook's last cell calls :func:`push_results` to send the run's results
-back to GitHub before the Colab session is wiped. The full procedure is in
-``notebooks/README.md``.
+back to GitHub before the Colab session is wiped. The full procedure, including
+the one-time token setup, is in ``COLAB.md`` at the repository root.
 
 Token handling - the rule that matters most in this file
 --------------------------------------------------------
@@ -41,8 +41,18 @@ CREDENTIAL_HELPER = "!f() { echo username=x-access-token; echo password=$GH_TOKE
 
 
 def in_colab() -> bool:
-    """True inside a Google Colab runtime."""
-    return "google.colab" in sys.modules
+    """True on a Google Colab runtime - in the browser, or reached from VS Code.
+
+    Checks that the ``google.colab`` package is *installed* rather than already
+    imported: a runtime reached through the VS Code Colab extension may not have
+    imported it yet, but it is always installed there, and never locally.
+    """
+    import importlib.util
+
+    try:
+        return importlib.util.find_spec("google.colab") is not None
+    except ModuleNotFoundError:  # no `google` namespace at all - certainly local
+        return False
 
 
 def colab_secret(name: str) -> str | None:
@@ -95,7 +105,7 @@ def push_results(
     if not token:
         raise RuntimeError(
             "No GitHub token. Add GH_TOKEN to Colab Secrets (key icon, left sidebar) "
-            "and allow this notebook to access it - see notebooks/README.md."
+            "and allow this notebook to access it - see COLAB.md."
         )
     name = name or colab_secret("GIT_NAME")
     email = email or colab_secret("GIT_EMAIL")
@@ -136,7 +146,8 @@ def push_results(
         return False
 
     git("commit", "-m", message, show=True)
-    git("pull", "--rebase", "origin", branch, network=True, show=True)
+    # --autostash: any other edit in the Colab copy must not block the push.
+    git("pull", "--rebase", "--autostash", "origin", branch, network=True, show=True)
     git("push", "origin", f"HEAD:{branch}", network=True, show=True)
     print(
         f"Results pushed to '{branch}'.\n"

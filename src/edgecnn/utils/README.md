@@ -48,7 +48,7 @@ outputs are committed, so the GitHub token:
 - is scrubbed from git's output before anything is printed.
 
 `tests/test_colab.py` checks all three with git mocked out. The full procedure is in
-[`notebooks/README.md` → Colab](../../../notebooks/README.md#colab-fallback).
+[COLAB.md](../../../COLAB.md).
 
 ## For JSON that crosses a member boundary
 

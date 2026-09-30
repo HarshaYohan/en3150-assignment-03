@@ -63,8 +63,40 @@ def test_notebook_is_valid_nbformat4(stem: str) -> None:
 @pytest.mark.parametrize("stem", SECTION_NOTEBOOKS)
 def test_first_cell_is_the_guarded_colab_bootstrap(stem: str) -> None:
     first = _code_cells(_load(stem))[0]
-    assert 'IN_COLAB = "google.colab" in sys.modules' in first
+    # "installed", not "already imported": also true on a runtime reached from VS Code
+    assert 'find_spec("google.colab")' in first
     assert "if IN_COLAB:" in first, f"{stem}: the bootstrap must do nothing locally"
+
+
+@pytest.mark.parametrize("stem", SECTION_NOTEBOOKS)
+def test_bootstrap_refreshes_the_clone_on_every_rerun(stem: str) -> None:
+    """Pushing a fix mid-session must reach the running Colab machine."""
+    first = _code_cells(_load(stem))[0]
+    assert '"fetch"' in first and '"-B", BRANCH' in first, (
+        f"{stem}: re-running cell 1 must fetch and check out the latest REPO@BRANCH"
+    )
+
+
+@pytest.mark.parametrize("stem", SECTION_NOTEBOOKS)
+def test_bootstrap_reads_personal_settings_from_colab_secrets(stem: str) -> None:
+    """Each member's fork / branch comes from their own Colab Secrets, never the notebook."""
+    first = _code_cells(_load(stem))[0]
+    assert '_secret("A03_REPO"' in first and '_secret("A03_BRANCH"' in first
+    assert "except Exception" in first, f"{stem}: unreadable Secrets (VS Code) must fall back"
+
+
+def test_bootstrap_defaults_are_not_personal() -> None:
+    """In VS Code the defaults are edited for a session. Committing your own fork or
+    branch would change everyone's default, so every notebook must carry the same values."""
+    settings = {}
+    for stem in SECTION_NOTEBOOKS:
+        first = _code_cells(_load(stem))[0]
+        repo = re.search(r'REPO = _secret\("A03_REPO", "([^"]+)"\)', first)
+        branch = re.search(r'BRANCH = _secret\("A03_BRANCH", "([^"]+)"\)', first)
+        assert repo and branch, f"{stem}: cell 1 must define REPO and BRANCH through _secret"
+        settings[stem] = (repo.group(1), branch.group(1))
+    assert len(set(settings.values())) == 1, f"cell 1 defaults differ between notebooks: {settings}"
+    assert next(iter(settings.values()))[1] == "main", "put BRANCH's default back to \"main\" before committing"
 
 
 @pytest.mark.parametrize("stem", SECTION_NOTEBOOKS)

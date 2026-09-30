@@ -340,13 +340,23 @@ every file it wrote, then announce it.
 ## 8. Colab fallback
 
 Everything runs locally by default. If a run is too slow on your laptop — the Stage 4 dry run shows
-you — open the **same notebook** in Colab and run it on a free GPU. Its first cell sets Colab up and
-does nothing on your laptop, so you never edit the notebook to switch.
+you — run the **same notebook** on Colab's free GPU. Its first cell sets Colab up and does nothing on
+your laptop.
 
-The step-by-step procedure, including the one-time token setup, is in
-[`notebooks/README.md` → Colab](notebooks/README.md#colab-fallback). The one rule to remember:
-**never type or print your GitHub token in a notebook.** Outputs are committed, and the repository
-is public.
+- **Development runs:** VS Code with the Google Colab extension. The notebook stays local; only the
+  kernel moves.
+- **Official runs:** Colab in the browser, so the last cell can push the results with your token.
+
+The full step-by-step guide is **[COLAB.md](COLAB.md)**: one-time setup, both paths, which notebooks
+belong on Colab, and troubleshooting. Three rules to remember:
+
+- Colab only sees what you have **pushed**.
+- **Never type or print your GitHub token** in a notebook. Outputs are committed, and the repository
+  is public.
+- Your fork and branch go in your Colab Secrets (`A03_REPO` / `A03_BRANCH`), never in the notebook.
+  If you edit cell 1's defaults for a VS Code run, put them back before committing.
+
+Each member uses their own Colab — nothing is shared except the repository.
 
 ---
 

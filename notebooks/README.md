@@ -30,7 +30,7 @@ any machine.
 | Cell | What it does |
 |---|---|
 | Title | section, marks, owner, what it reads and writes, what the report needs from it |
-| **1 · Colab bootstrap** | does nothing locally; on Colab it clones and installs the repository |
+| **1 · Colab bootstrap** | does nothing locally; on Colab it clones your fork (from your Colab Secrets), installs it, and fetches your latest push on every re-run |
 | **2 · Setup** | `%autoreload 2`, imports, and **`MODE`** |
 | Style | `apply_style()`: small inline figures, print-quality saved PNGs |
 | Config | `cfg = load_config("configs/experiments/<run>.yaml", mode=MODE)` |
@@ -91,51 +91,19 @@ jupyter nbconvert --to notebook --execute --inplace notebooks/03_optimizer_study
 Runs the notebook headless from a terminal and saves its outputs into the file, just like
 Restart & Run All. Useful for leaving a long official run going.
 
-## Colab fallback
+## Colab
 
-Everything runs locally by default. Use Colab when a run is too slow on your laptop — the Stage 4 dry
-run shows you which runs those are. You run the **same notebook**, unchanged.
+Everything runs locally by default. When a run is too slow on your laptop, run the **same notebook**
+on Colab's GPU. Cell 1 fetches the code from your fork: in the browser it reads your fork and branch
+from your Colab Secrets (`A03_REPO` / `A03_BRANCH`), so you never edit the notebook. In VS Code, which
+cannot read Secrets, you edit cell 1's defaults for the session and put them back before committing.
 
-### One-time setup (only if you will use Colab)
+- **Development (`synthetic` / `debug`):** VS Code with the Google Colab extension. The notebook stays
+  on your laptop; only the kernel moves.
+- **Official runs:** Colab in the browser. The last cell pushes the results, and
+  *File → Save a copy in GitHub* brings the outputs back.
 
-1. On GitHub: **Settings → Developer settings → Personal access tokens → Fine-grained tokens →
-   Generate new token**. Repository access: **only this repository**. Permissions: **Contents →
-   Read and write**. Copy the token.
-2. In any Colab notebook, open **Secrets** (the key icon in the left sidebar) and add:
-
-   | Name | Value |
-   |---|---|
-   | `GH_TOKEN` | the token from step 1 |
-   | `GIT_NAME` | your name, as it should appear on the commit |
-   | `GIT_EMAIL` | your GitHub email (the `...@users.noreply.github.com` one is fine) |
-
-   Turn on **Notebook access** for each when Colab asks.
-
-### Running a notebook on Colab
-
-1. Open it straight from GitHub:
-   `https://colab.research.google.com/github/ThejithaR/EN3150-Assignment-03-CNN/blob/main/notebooks/<notebook>.ipynb`
-2. **Runtime → Change runtime type → T4 GPU.**
-3. In cell 1, set `BRANCH` if your work is not merged into `main` yet.
-4. Set `MODE = "official"` in cell 2, then **Runtime → Run all**. Cell 1 clones and installs the
-   repository. EuroSAT is downloaded again and processed to match the committed split — the split is
-   reused, never redrawn.
-5. The last cell commits this run's result files and pushes them.
-6. Save the notebook itself: **File → Save a copy in GitHub**, same repository, same branch, same
-   path. That is what brings the outputs back.
-
-Do step 5 before step 6, and do both before closing the tab. A Colab session is wiped when it ends.
-
-### Rules
-
-- **The token never appears in a cell or an output.** It stays in Colab Secrets and reaches git only
-  through an environment variable. The repository is public and outputs are committed, so a printed
-  token would be published. `push_results` scrubs it from git's output as a safety net.
-- `03` and `04` share a table of epoch times, so run **both** on Colab, or **both** on the same
-  laptop.
-- Run `06` locally, on CPU. It measures latency, and Colab's CPU model changes between sessions.
-- No shared drive is needed. Results are small and go through git. Checkpoints are never shared,
-  because nothing downstream needs them.
+Step-by-step setup, what can run where, and troubleshooting: **[COLAB.md](../COLAB.md)**.
 
 ## `scratch/`
 

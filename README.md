@@ -63,7 +63,7 @@ try an idea  ──promote──►  shared library  ◄──import──  run 
 
 Only official runs write results, so debug work can never leak into the report. Full workflow,
 worked example and troubleshooting: [CONTRIBUTING.md](CONTRIBUTING.md). Notebook reference:
-[notebooks/README.md](notebooks/README.md).
+[notebooks/README.md](notebooks/README.md). Laptop too slow for a run? [COLAB.md](COLAB.md).
 
 ---
 
@@ -248,6 +248,7 @@ Model B's 100,000-parameter cap is asserted by
 EN3150-Assignment-03-CNN/
 ├── README.md                  this file — split, seams, run matrix
 ├── CONTRIBUTING.md            the developer guide: setup, workflow, git, official runs
+├── COLAB.md                   running notebooks on Colab's GPU: setup, handover, troubleshooting
 ├── pyproject.toml             package `edgecnn`; the only reason to reinstall
 ├── notebooks/
 │   ├── 00_setup … 07_final_comparison.ipynb   one per section; the official drivers
