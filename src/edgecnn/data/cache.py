@@ -24,7 +24,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from edgecnn.utils.logging import get_logger
+from edgecnn.utils.logging import get_logger, progress
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -107,8 +107,10 @@ def load_pixels(
         pixels[position] = array
 
     workers = min(8, os.cpu_count() or 1)
+    count = len(relative_paths)
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        list(pool.map(decode, range(len(relative_paths))))
+        for _ in progress(pool.map(decode, range(count)), count, "Decoding images", "img"):
+            pass
 
     for old in image_dir.parent.glob(f"{image_dir.name}.pixels-*.npy"):
         old.unlink(missing_ok=True)

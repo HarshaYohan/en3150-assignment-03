@@ -34,6 +34,14 @@ OPTIMIZER_COLORS: dict[str, str] = {
     "adam": "#DA8BC3",
 }
 
+#: One colour per split, one hue from dark to light, so the three bars of a
+#: class read as one group in the dataset figures.
+SPLIT_COLORS: dict[str, str] = {
+    "train": "#2F5E8E",
+    "val": "#6C9BCF",
+    "test": "#B3CDE8",
+}
+
 #: Inline (notebook) resolution - keeps committed notebooks small.
 INLINE_DPI: int = 100
 
@@ -74,11 +82,27 @@ def apply_style() -> None:
     Sets inline figures to ``INLINE_DPI`` and saved files to ``FIGURE_DPI``, with
     font sizes that remain legible at half page width, a white background and a
     light grid - a dark theme wastes toner and reproduces badly in print.
-    """
-    import matplotlib.pyplot as plt  # activates the notebook backend first,
-                                     # so the settings below take precedence
 
+    In a notebook it also turns on inline display, so a function that returns a
+    ``Figure`` shows it once, as an image. Build figures with
+    ``matplotlib.figure.Figure`` and return them; a figure made with pyplot must
+    be closed before it is returned, or the notebook shows it twice.
+    """
+    import matplotlib.pyplot as plt
+
+    _enable_inline_display()  # first: activating the backend may reset settings
     plt.rcParams.update(_STYLE)
+
+
+def _enable_inline_display() -> None:
+    """In a Jupyter kernel, show returned figures inline, whether or not pyplot made them."""
+    try:
+        from IPython import get_ipython
+    except ImportError:
+        return
+    shell = get_ipython()
+    if shell is not None and getattr(shell, "kernel", None) is not None:
+        shell.run_line_magic("matplotlib", "inline")
 
 
 def save_figure(fig: Figure, path: Path, also_copy_to: Path | None = None) -> Path:
@@ -106,17 +130,17 @@ def save_figure(fig: Figure, path: Path, also_copy_to: Path | None = None) -> Pa
 
 
 def color_for(key: str, kind: str = "model") -> str:
-    """The fixed colour for a model or optimizer key.
+    """The fixed colour for a model, optimizer or split key.
 
     An unknown key gets a neutral grey rather than an error - a missing colour
     should never abort a figure.
 
     Raises:
-        ValueError: if ``kind`` is neither ``"model"`` nor ``"optimizer"``.
+        ValueError: if ``kind`` is not ``"model"``, ``"optimizer"`` or ``"split"``.
     """
-    palettes = {"model": MODEL_COLORS, "optimizer": OPTIMIZER_COLORS}
+    palettes = {"model": MODEL_COLORS, "optimizer": OPTIMIZER_COLORS, "split": SPLIT_COLORS}
     if kind not in palettes:
-        raise ValueError(f"kind must be 'model' or 'optimizer', not {kind!r}")
+        raise ValueError(f"kind must be one of {sorted(palettes)}, not {kind!r}")
     return palettes[kind].get(key, NEUTRAL_GREY)
 
 

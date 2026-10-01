@@ -127,6 +127,7 @@ from edgecnn.evaluation.plotting import (  # noqa: E402
     MODEL_COLORS,
     NEUTRAL_GREY,
     OPTIMIZER_COLORS,
+    SPLIT_COLORS,
     annotate_hardware,
     apply_style,
     color_for,
@@ -145,6 +146,7 @@ def test_apply_style_sets_inline_and_saved_resolutions() -> None:
 def test_color_for_known_unknown_and_invalid_kinds() -> None:
     assert color_for("model_b") == MODEL_COLORS["model_b"]
     assert color_for("adam", kind="optimizer") == OPTIMIZER_COLORS["adam"]
+    assert color_for("train", kind="split") == SPLIT_COLORS["train"]
     assert color_for("not_a_model") == NEUTRAL_GREY
     with pytest.raises(ValueError):
         color_for("model_b", kind="shape")

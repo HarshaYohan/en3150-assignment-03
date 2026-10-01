@@ -1,23 +1,36 @@
-"""Unit tests for the data layer: split drawing, manifests, pixel cache, synthetic data, loaders."""
+"""Unit tests for the data layer: split drawing, manifests, pixel cache, synthetic data,
+loaders, and EuroSAT preparation (on a small fake download) with its Section 1 figures."""
 
 from __future__ import annotations
+
+import shutil
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 from edgecnn.config.loader import load_config
 from edgecnn.contracts import paths, schema
+from edgecnn.contracts.schema import ContractViolation
 from edgecnn.contracts.types import INPUT_SHAPE, SPLIT_FRACTIONS
 from edgecnn.data.prepare import (
+    ensure_images_present,
+    prepare_dataset,
     read_split_manifest,
     stratified_split,
     summarize_split,
     write_split_manifest,
 )
+from edgecnn.utils.io import sha256_file
 
 torch = pytest.importorskip("torch", reason="torch not installed")
 
 from edgecnn.data.cache import channel_stats, load_pixels  # noqa: E402
+from edgecnn.data.inspect import (  # noqa: E402
+    plot_class_distribution,
+    plot_sample_grid,
+    split_counts_table,
+)
 from edgecnn.data.loaders import (  # noqa: E402
     build_dataloaders,
     build_single_loader,
@@ -289,3 +302,152 @@ def test_real_data_without_a_committed_split_says_what_to_do(monkeypatch, tmp_pa
     monkeypatch.setattr(paths, "SPLIT_MANIFEST", tmp_path / "missing.csv")
     with pytest.raises(FileNotFoundError, match="01_data_preparation"):
         build_dataloaders(load_config(_experiment("model_b__adam"), mode="debug"))
+
+
+# --- EuroSAT preparation, on a small fake download (no network) -------------------
+
+FAKE_CLASSES = ("Forest", "River", "SeaLake")
+FAKE_PER_CLASS = 20
+
+
+@pytest.fixture
+def fake_eurosat(tmp_path, monkeypatch):
+    """A 3-class, 60-image EuroSAT laid out as torchvision leaves it; every output goes to tmp."""
+    from PIL import Image
+
+    rng = np.random.RandomState(0)
+    raw = tmp_path / "raw"
+    for name in FAKE_CLASSES:
+        folder = raw / "eurosat" / "2750" / name
+        folder.mkdir(parents=True)
+        for index in range(1, FAKE_PER_CLASS + 1):
+            pixels = rng.randint(0, 256, size=(64, 64, 3), dtype=np.uint8)
+            Image.fromarray(pixels).save(folder / f"{name}_{index}.jpg", quality=95)
+
+    splits = tmp_path / "splits"
+    monkeypatch.setattr(paths, "PROCESSED_DIR", tmp_path / "processed")
+    monkeypatch.setattr(paths, "SPLIT_MANIFEST", splits / "split_manifest.csv")
+    monkeypatch.setattr(paths, "SPLIT_META", splits / "split_meta.json")
+    monkeypatch.setattr(paths, "NORM_STATS", splits / "norm_stats.json")
+    monkeypatch.setattr(paths, "DATASET_FIGURES_DIR", tmp_path / "figures")
+    overrides = {
+        "dataset.root": str(raw),
+        "dataset.download": False,
+        "dataset.expected_num_classes": len(FAKE_CLASSES),
+        "dataset.expected_num_images": len(FAKE_CLASSES) * FAKE_PER_CLASS,
+    }
+
+    def config(mode: str = "debug", **extra):
+        return load_config(_experiment("model_b__adam"), mode=mode, **{**overrides, **extra})
+
+    images = tmp_path / "processed" / "eurosat_64"
+    return SimpleNamespace(config=config, root=tmp_path, images=images)
+
+
+def test_debug_run_draws_the_split_but_writes_nothing(fake_eurosat) -> None:
+    prepared = prepare_dataset(fake_eurosat.config("debug"))
+    assert prepared["written"] == [] and not paths.SPLIT_MANIFEST.exists()
+    assert prepared["meta"]["class_names"] == list(FAKE_CLASSES)
+    assert prepared["meta"]["counts"] == {"train": 42, "val": 9, "test": 9, "total": 60}
+    assert prepared["norm_stats"]["fitted_on"] == "train"
+    assert prepared["norm_stats"]["num_images"] == 42
+    assert len(list(fake_eurosat.images.rglob("*.jpg"))) == 60
+
+
+def test_official_run_writes_the_split_debug_showed(fake_eurosat) -> None:
+    shown = prepare_dataset(fake_eurosat.config("debug"))["meta"]["manifest_sha256"]
+    written = prepare_dataset(fake_eurosat.config("official"))["written"]
+    assert set(written) == {paths.SPLIT_MANIFEST, paths.SPLIT_META, paths.NORM_STATS}
+    assert schema.validate_manifest(paths.SPLIT_MANIFEST) == 60
+    meta = schema.read_json(paths.SPLIT_META, "split_meta")
+    assert meta["manifest_sha256"] == sha256_file(paths.SPLIT_MANIFEST) == shown
+    schema.read_json(paths.NORM_STATS, "norm_stats")
+
+
+def test_processed_images_are_byte_copies(fake_eurosat) -> None:
+    prepare_dataset(fake_eurosat.config("debug"))
+    source = fake_eurosat.root / "raw" / "eurosat" / "2750" / "River" / "River_7.jpg"
+    assert (fake_eurosat.images / "River" / "River_7.jpg").read_bytes() == source.read_bytes()
+
+
+def test_a_committed_split_is_reused_never_redrawn(fake_eurosat) -> None:
+    prepare_dataset(fake_eurosat.config("official"))
+    committed = paths.SPLIT_MANIFEST.read_bytes()
+    reseeded = fake_eurosat.config("official", **{"split.seed": 7})
+    assert prepare_dataset(reseeded)["written"] == []
+    assert paths.SPLIT_MANIFEST.read_bytes() == committed
+    assert prepare_dataset(reseeded, force=True)["written"]
+    assert paths.SPLIT_MANIFEST.read_bytes() != committed
+
+
+def test_an_edited_manifest_is_refused(fake_eurosat) -> None:
+    prepare_dataset(fake_eurosat.config("official"))
+    edited = paths.SPLIT_MANIFEST.read_text(encoding="utf-8").replace(",train", ",test", 1)
+    paths.SPLIT_MANIFEST.write_text(edited, encoding="utf-8", newline="\n")
+    with pytest.raises(ContractViolation, match="SHA-256"):
+        prepare_dataset(fake_eurosat.config("official"))
+    with pytest.raises(ContractViolation, match="SHA-256"):
+        ensure_images_present(fake_eurosat.config("debug"))
+
+
+def test_an_incomplete_download_is_refused(fake_eurosat) -> None:
+    with pytest.raises(ValueError, match="expected_num_images"):
+        prepare_dataset(fake_eurosat.config("debug", **{"dataset.expected_num_images": 61}))
+
+
+def test_a_missing_download_explains_what_to_do(fake_eurosat) -> None:
+    nowhere = fake_eurosat.config("debug", **{"dataset.root": str(fake_eurosat.root / "nowhere")})
+    with pytest.raises(FileNotFoundError, match="2750"):
+        prepare_dataset(nowhere)
+
+
+def test_missing_images_are_fetched_without_redrawing(fake_eurosat) -> None:
+    prepare_dataset(fake_eurosat.config("official"))
+    committed = paths.SPLIT_MANIFEST.read_bytes()
+    for name in ("Forest/Forest_1.jpg", "SeaLake/SeaLake_20.jpg"):
+        (fake_eurosat.images / name).unlink()
+    cfg = fake_eurosat.config("debug")
+    assert ensure_images_present(cfg) == 2
+    assert ensure_images_present(cfg) == 0
+    assert paths.SPLIT_MANIFEST.read_bytes() == committed
+
+
+def test_a_fresh_clone_loads_the_committed_split(fake_eurosat) -> None:
+    prepare_dataset(fake_eurosat.config("official"))
+    shutil.rmtree(paths.PROCESSED_DIR)  # images and pixel cache gone, as on a new machine
+    data = build_dataloaders(fake_eurosat.config("debug"))
+    assert data.class_names == list(FAKE_CLASSES)
+    assert (len(data.val.dataset), len(data.test.dataset)) == (9, 9)
+    images, labels = next(iter(data.test))
+    assert images.dtype == torch.float32 and images.shape[1:] == INPUT_SHAPE
+    assert labels.dtype == torch.int64
+
+
+def test_split_table_and_figures(fake_eurosat) -> None:
+    meta = prepare_dataset(fake_eurosat.config("debug"))["meta"]
+    table = split_counts_table(meta)
+    assert table.loc["Total"].tolist() == [42, 9, 9, 60]
+    assert table.loc["River"].tolist() == [14, 3, 3, 20]
+
+    plot_class_distribution(meta, write=True)
+    assert (paths.DATASET_FIGURES_DIR / "class_distribution.png").exists()
+
+    cfg = fake_eurosat.config("debug")
+    grids = [plot_sample_grid(cfg, per_class=2, write=True) for _ in range(2)]
+    shown = [[ax.images[0].get_array() for ax in grid.axes if ax.images] for grid in grids]
+    assert len(shown[0]) == len(FAKE_CLASSES) * 2
+    assert all(np.array_equal(a, b) for a, b in zip(*shown, strict=True))  # same picks every time
+    assert (paths.DATASET_FIGURES_DIR / "sample_grid.png").exists()
+
+
+def test_synthetic_mode_prepares_the_generated_split(use_fixture) -> None:
+    cfg = load_config(_experiment("model_b__adam"), mode="synthetic")
+    prepared = prepare_dataset(cfg)
+    assert prepared["written"] == [] and prepared["meta"]["dataset_name"] == "synthetic"
+    assert prepared["meta"]["counts"]["total"] == 200
+    assert sum(bool(ax.images) for ax in plot_sample_grid(cfg, per_class=2).axes) == 20
+
+
+def test_split_files_keep_lf_line_endings_in_git() -> None:
+    rules = (paths.REPO_ROOT / ".gitattributes").read_text(encoding="utf-8").splitlines()
+    assert "data/splits/* text eol=lf" in rules
