@@ -11,11 +11,18 @@ from __future__ import annotations
 
 import logging
 import sys
+from collections.abc import Iterable, Iterator
 from pathlib import Path
+from typing import TypeVar
 
 _FORMAT = "%(asctime)s %(levelname)-7s %(name)s: %(message)s"
 _DATEFMT = "%H:%M:%S"
 _MARK = "_edgecnn_handler"  # tags the handlers this module owns
+
+#: Below this many items a progress bar is noise, so none is shown.
+PROGRESS_MIN_ITEMS = 1000
+
+T = TypeVar("T")
 
 
 def setup_logging(level: str = "INFO", log_file: str | None = None) -> None:
@@ -51,3 +58,19 @@ def setup_logging(level: str = "INFO", log_file: str | None = None) -> None:
 def get_logger(name: str) -> logging.Logger:
     """Return a module logger. Use ``get_logger(__name__)``."""
     return logging.getLogger(name)
+
+
+def progress(iterable: Iterable[T], total: int, desc: str, unit: str = "it") -> Iterator[T]:
+    """Wrap a long loop in a one-line progress bar that disappears when it finishes.
+
+    Loops over fewer than ``PROGRESS_MIN_ITEMS`` items get no bar: they end
+    before one would be readable, and it would only clutter a notebook's output.
+    """
+    from tqdm.auto import tqdm
+
+    return iter(
+        tqdm(
+            iterable, total=total, desc=desc, unit=unit, leave=False,
+            disable=total < PROGRESS_MIN_ITEMS,
+        )
+    )
