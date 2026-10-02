@@ -9,10 +9,7 @@ quotes it from.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from torch import nn
+from torch import nn
 
 
 def conv_bn_act(
@@ -32,7 +29,20 @@ def conv_bn_act(
     ``bias=False`` on the conv - it is a small saving but the report should
     show it is understood rather than accidental.
     """
-    raise NotImplementedError("Member 2: implement conv_bn_act")
+    layers: list[nn.Module] = [
+        nn.Conv2d(
+            in_channels,
+            out_channels,
+            kernel_size,
+            stride=stride,
+            padding=padding,
+            bias=not batch_norm,
+        )
+    ]
+    if batch_norm:
+        layers.append(nn.BatchNorm2d(out_channels))
+    layers.append(get_activation(activation))
+    return nn.Sequential(*layers)
 
 
 def depthwise_separable_conv(
@@ -87,7 +97,15 @@ def get_activation(name: str) -> nn.Module:
     why MobileNetV3 uses it on mobile silicon - worth a sentence contrasting
     it with what Model B chooses.
     """
-    raise NotImplementedError("Member 2: implement get_activation")
+    activations = {
+        "relu": nn.ReLU,
+        "relu6": nn.ReLU6,
+        "leaky_relu": nn.LeakyReLU,
+        "hardswish": nn.Hardswish,
+    }
+    if name not in activations:
+        raise ValueError(f"Unknown activation '{name}'. Use one of: {list(activations)}")
+    return activations[name]()
 
 
 def count_parameters(module: nn.Module, trainable_only: bool = True) -> int:
