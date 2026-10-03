@@ -15,6 +15,7 @@ output path.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -45,7 +46,81 @@ def build_optimizer(model: nn.Module, cfg: dict[str, Any]) -> torch.optim.Optimi
     Raises:
         ValueError: on an unsupported name, listing the valid options.
     """
-    raise NotImplementedError("Member 3: implement build_optimizer")
+    import torch
+
+    settings = dict(cfg)
+    name = str(settings.pop("name", "")).lower()
+    if name not in SUPPORTED_OPTIMIZERS:
+        raise ValueError(
+            f"unsupported optimizer {name!r}; expected one of {list(SUPPORTED_OPTIMIZERS)}"
+        )
+
+    try:
+        lr = float(settings.pop("lr"))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("optimizer.lr must be a positive number") from exc
+    if lr <= 0:
+        raise ValueError("optimizer.lr must be positive")
+
+    backbone_lr_scale = settings.pop("backbone_lr_scale", None)
+    params: Iterable[torch.nn.Parameter] | list[dict[str, object]]
+    if backbone_lr_scale is None:
+        params = [parameter for parameter in model.parameters() if parameter.requires_grad]
+    else:
+        from edgecnn.models.pretrained import param_groups
+
+        params = param_groups(model, base_lr=lr, backbone_lr_scale=float(backbone_lr_scale))
+
+    if not params:
+        raise ValueError("model has no trainable parameters")
+
+    weight_decay = float(settings.pop("weight_decay", 0.0))
+    if weight_decay < 0:
+        raise ValueError("optimizer.weight_decay cannot be negative")
+
+    if name in {"sgd", "sgd_momentum"}:
+        default_momentum = 0.0 if name == "sgd" else 0.9
+        momentum = float(settings.pop("momentum", default_momentum))
+        if name == "sgd" and momentum != 0.0:
+            raise ValueError("optimizer 'sgd' must use momentum: 0.0; use 'sgd_momentum' instead")
+        if name == "sgd_momentum" and momentum <= 0.0:
+            raise ValueError("optimizer 'sgd_momentum' requires momentum greater than zero")
+        optimizer = torch.optim.SGD(
+            params,
+            lr=lr,
+            momentum=momentum,
+            weight_decay=weight_decay,
+            dampening=float(settings.pop("dampening", 0.0)),
+            nesterov=bool(settings.pop("nesterov", False)),
+        )
+    elif name in {"adam", "adamw"}:
+        betas = tuple(float(value) for value in settings.pop("betas", (0.9, 0.999)))
+        if len(betas) != 2:
+            raise ValueError("optimizer.betas must contain exactly two values")
+        optimizer_type = torch.optim.Adam if name == "adam" else torch.optim.AdamW
+        optimizer = optimizer_type(
+            params,
+            lr=lr,
+            betas=betas,
+            eps=float(settings.pop("eps", 1e-8)),
+            weight_decay=weight_decay,
+            amsgrad=bool(settings.pop("amsgrad", False)),
+        )
+    else:
+        optimizer = torch.optim.RMSprop(
+            params,
+            lr=lr,
+            alpha=float(settings.pop("alpha", 0.99)),
+            eps=float(settings.pop("eps", 1e-8)),
+            weight_decay=weight_decay,
+            momentum=float(settings.pop("momentum", 0.0)),
+            centered=bool(settings.pop("centered", False)),
+        )
+
+    if settings:
+        unknown = ", ".join(sorted(settings))
+        raise ValueError(f"unsupported settings for optimizer {name!r}: {unknown}")
+    return optimizer
 
 
 def build_scheduler(
@@ -63,7 +138,65 @@ def build_scheduler(
     ``reduce_on_plateau`` steps on a metric rather than on epoch count, so the
     trainer has to call it differently - handle that in the trainer, not here.
     """
-    raise NotImplementedError("Member 3: implement build_scheduler")
+    import torch
+
+    settings = dict(cfg)
+    name = str(settings.pop("name", "none")).lower()
+    if name not in SUPPORTED_SCHEDULERS:
+        raise ValueError(
+            f"unsupported scheduler {name!r}; expected one of {list(SUPPORTED_SCHEDULERS)}"
+        )
+    if epochs < 1:
+        raise ValueError("epochs must be at least 1")
+    if name == "none":
+        return None
+
+    warmup_epochs = int(settings.pop("warmup_epochs", 0))
+    if warmup_epochs < 0 or warmup_epochs >= epochs:
+        raise ValueError("scheduler.warmup_epochs must be in the range [0, epochs)")
+
+    if name == "step":
+        settings.pop("min_lr", None)  # StepLR has no floor; accepted for shared configs.
+        scheduler = torch.optim.lr_scheduler.StepLR(
+            optimizer,
+            step_size=int(settings.pop("step_size", max(1, epochs // 3))),
+            gamma=float(settings.pop("gamma", 0.1)),
+        )
+    elif name == "cosine":
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer,
+            T_max=max(1, epochs - warmup_epochs),
+            eta_min=float(settings.pop("min_lr", 0.0)),
+        )
+    else:
+        if warmup_epochs:
+            raise ValueError("warmup is not supported with reduce_on_plateau")
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            mode=str(settings.pop("mode", "min")),
+            factor=float(settings.pop("factor", 0.1)),
+            patience=int(settings.pop("patience", 3)),
+            threshold=float(settings.pop("threshold", 1e-4)),
+            min_lr=float(settings.pop("min_lr", 0.0)),
+        )
+
+    if settings:
+        unknown = ", ".join(sorted(settings))
+        raise ValueError(f"unsupported settings for scheduler {name!r}: {unknown}")
+
+    if warmup_epochs:
+        warmup = torch.optim.lr_scheduler.LinearLR(
+            optimizer,
+            start_factor=1.0 / max(2, warmup_epochs),
+            end_factor=1.0,
+            total_iters=warmup_epochs,
+        )
+        scheduler = torch.optim.lr_scheduler.SequentialLR(
+            optimizer,
+            schedulers=[warmup, scheduler],
+            milestones=[warmup_epochs],
+        )
+    return scheduler
 
 
 def describe_optimizer(optimizer: torch.optim.Optimizer) -> dict[str, Any]:
@@ -74,4 +207,33 @@ def describe_optimizer(optimizer: torch.optim.Optimizer) -> dict[str, Any]:
     than re-reading the config - it records what was actually used, including
     any CLI override.
     """
-    raise NotImplementedError("Member 3: implement describe_optimizer")
+    import torch
+
+    defaults = optimizer.defaults
+    if isinstance(optimizer, torch.optim.SGD):
+        name = "sgd_momentum" if float(defaults.get("momentum", 0.0)) > 0 else "sgd"
+        keys = ("lr", "momentum", "dampening", "weight_decay", "nesterov")
+    elif isinstance(optimizer, torch.optim.AdamW):
+        name = "adamw"
+        keys = ("lr", "betas", "eps", "weight_decay", "amsgrad")
+    elif isinstance(optimizer, torch.optim.Adam):
+        name = "adam"
+        keys = ("lr", "betas", "eps", "weight_decay", "amsgrad")
+    elif isinstance(optimizer, torch.optim.RMSprop):
+        name = "rmsprop"
+        keys = ("lr", "alpha", "eps", "weight_decay", "momentum", "centered")
+    else:
+        name = optimizer.__class__.__name__.lower()
+        keys = tuple(defaults)
+
+    description: dict[str, Any] = {"optimizer": name}
+    for key in keys:
+        if key in defaults:
+            value = defaults[key]
+            description[key] = list(value) if isinstance(value, tuple) else value
+
+    group_lrs = [float(group["lr"]) for group in optimizer.param_groups]
+    description["lr"] = max(group_lrs)
+    if len(group_lrs) > 1:
+        description["parameter_group_lrs"] = group_lrs
+    return description

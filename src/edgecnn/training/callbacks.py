@@ -5,10 +5,14 @@ Owner: Member 3.
 
 from __future__ import annotations
 
+from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+from edgecnn.contracts import paths
+
 if TYPE_CHECKING:
-    from pathlib import Path
+    from torch import nn
 
 
 class EarlyStopping:
@@ -92,8 +96,63 @@ class CheckpointManager:
         save_last: bool = True,
         official: bool = True,
     ) -> None:
-        raise NotImplementedError("Member 3: implement CheckpointManager.__init__")
+        if not run_id:
+            raise ValueError("run_id cannot be empty")
+        if mode not in {"min", "max"}:
+            raise ValueError("mode must be either 'min' or 'max'")
+
+        self.run_id = run_id
+        self.monitor = monitor
+        self.mode = mode
+        self.save_last = save_last
+        self.save_best = True
+        self.official = official
+        self.best: float | None = None
+        self.best_path = paths.best_checkpoint(run_id, official=official)
+        self.last_path = paths.last_checkpoint(run_id, official=official)
+        self.save_fn: Callable[[Path, nn.Module, int, float], None] | None = None
+        paths.ensure_run_dirs(run_id, official=official)
 
     def maybe_save(self, model: object, epoch: int, metrics: dict[str, float]) -> Path | None:
         """Save when the monitored metric improves. Returns the path, or None."""
-        raise NotImplementedError("Member 3: implement CheckpointManager.maybe_save")
+        if self.monitor not in metrics:
+            raise KeyError(f"Missing monitored metric: {self.monitor!r}")
+        if epoch < 1:
+            raise ValueError("epoch numbering must start at 1")
+
+        value = float(metrics[self.monitor])
+        improved = (
+            self.best is None
+            or (self.mode == "max" and value > self.best)
+            or (self.mode == "min" and value < self.best)
+        )
+
+        if self.save_last:
+            self._save(self.last_path, model, epoch, value)
+        if not improved or not self.save_best:
+            return None
+
+        self.best = value
+        self._save(self.best_path, model, epoch, value)
+        return self.best_path
+
+    def _save(self, path: Path, model: object, epoch: int, value: float) -> None:
+        """Use the trainer's full serializer, or a small standalone fallback."""
+        if self.save_fn is not None:
+            self.save_fn(path, model, epoch, value)  # type: ignore[arg-type]
+            return
+
+        import torch
+
+        state_dict = getattr(model, "state_dict", None)
+        if not callable(state_dict):
+            raise TypeError("model must provide a callable state_dict() method")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        torch.save(
+            {
+                "state_dict": state_dict(),
+                "epoch": epoch,
+                self.monitor: value,
+            },
+            path,
+        )
