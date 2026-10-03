@@ -80,7 +80,28 @@ def depthwise_separable_conv(
     silently a normal convolution with far more parameters, which is exactly
     the kind of error the 100k budget test catches.
     """
-    raise NotImplementedError("Member 2: implement depthwise_separable_conv")
+    layers: list[nn.Module] = [
+        # depthwise: groups=in_channels gives each input channel its own kernel
+        nn.Conv2d(
+            in_channels,
+            in_channels,
+            kernel_size,
+            stride=stride,
+            padding=padding,
+            groups=in_channels,
+            bias=not batch_norm,
+        )
+    ]
+    if batch_norm:
+        layers.append(nn.BatchNorm2d(in_channels))
+    layers.append(get_activation(activation))
+
+    # pointwise: a 1x1 Conv that mixes the channels
+    layers.append(nn.Conv2d(in_channels, out_channels, kernel_size=1, bias=not batch_norm))
+    if batch_norm:
+        layers.append(nn.BatchNorm2d(out_channels))
+    layers.append(get_activation(activation))
+    return nn.Sequential(*layers)
 
 
 def get_activation(name: str) -> nn.Module:
@@ -116,4 +137,7 @@ def count_parameters(module: nn.Module, trainable_only: bool = True) -> int:
     ``edgecnn.evaluation.benchmark.profile_model`` so every model is counted
     identically - do not put this number in the report directly.
     """
-    raise NotImplementedError("Member 2: implement count_parameters")
+    params = module.parameters()
+    if trainable_only:
+        params = (p for p in params if p.requires_grad)
+    return sum(p.numel() for p in params)
