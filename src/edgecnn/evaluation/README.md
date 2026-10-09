@@ -65,13 +65,14 @@ because every column still looks plausible. One code path removes that risk.
 
 ## Traps
 
-- `thop.profile` attaches `total_ops` buffers to the model. Profile a `deepcopy`, or the extra buffers
-  inflate `model_size_kb`.
-- Measure `model_size_kb` by serialising the `state_dict`, not as `numel * 4`. The computed figure
-  misses buffers such as BatchNorm running statistics, which take real bytes on the device.
+- `count_macs` counts **convolution and fully-connected** multiply-accumulates only, the convention
+  of the MobileNet and SqueezeNet papers; it reproduces torchvision's published figures exactly.
+  Many papers report FLOPs instead, roughly `2 × MACs`. Say which you used.
+- Measure `model_size_kb` by serialising the `state_dict`, not as `numel * 4` and not from the
+  checkpoint file. The computed figure misses buffers such as BatchNorm running statistics, which
+  take real bytes on the device; a checkpoint also holds optimizer state, several times the weights.
 - Pass `labels=range(len(class_names))` to `sklearn.confusion_matrix`. Otherwise a class absent from
   the predictions disappears and the matrix stops being square.
-- thop reports **MACs**, while many papers report FLOPs, roughly `2 × MACs`. Say which you used.
 
 ## Sanity check worth asserting
 

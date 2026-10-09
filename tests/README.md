@@ -39,6 +39,7 @@ enable a test.**
 | `test_notebooks.py` | the eight section notebooks exist and follow the standard layout; no tokens, no local paths | no |
 | `test_colab.py` | `push_results` issues the right git commands and never leaks the token | no |
 | `test_data.py` | the split is exact and reproducible; manifests are byte-identical across platforms; the pixel cache rebuilds when an image changes; augmentation on train only; loader order, subsets and normalisation; EuroSAT preparation on a small fake download — only official runs write, a committed split is never redrawn, edits are detected, missing images are refetched | yes |
+| `test_evaluation.py` | metrics match hand-computed cases; the confusion matrix stays square; `test_metrics.json` validates; MAC counts reproduce torchvision's published figures; `evaluate_run` end to end with the real Model B and trainer, refusing another run's checkpoint; loss-curve figures display once | yes |
 | `test_utils.py` | seeding repeats; device errors are loud; logging does not stack; Markdown tables; plot style | yes |
 | `fixtures/` | the synthetic dataset — see `fixtures/README.md` | |
 
