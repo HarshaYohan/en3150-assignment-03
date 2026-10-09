@@ -5,12 +5,8 @@ from typing import TYPE_CHECKING, Any
 from torchvision.models import (
     MobileNet_V2_Weights,
     SqueezeNet1_1_Weights,
-)
-from torchvision.models import (
-    mobilenet_v2 as torchvision_mobilenet_v2,
-)
-from torchvision.models import (
-    squeezenet1_1 as torchvision_squeezenet1_1,
+    mobilenet_v2,
+    squeezenet1_1,
 )
 
 from edgecnn.models.pretrained.finetune import (
@@ -32,9 +28,7 @@ def build_mobilenet_v2(
     settings = dict(overrides)
     torchvision_name = str(settings.pop("torchvision_name", "mobilenet_v2"))
     if torchvision_name != "mobilenet_v2":
-        raise ValueError(
-            f"expected torchvision_name='mobilenet_v2', got {torchvision_name!r}"
-        )
+        raise ValueError(f"expected torchvision_name='mobilenet_v2', got {torchvision_name!r}")
 
     weights = _resolve_weights(
         MobileNet_V2_Weights,
@@ -46,20 +40,16 @@ def build_mobilenet_v2(
     dropout = float(settings.pop("dropout", 0.2))
     input_resolution = int(settings.pop("input_resolution", input_shape[-1]))
 
-    # Used by Trainer, not by the architecture constructor.
     settings.pop("backbone_lr_scale", None)
 
     if settings:
-        raise TypeError(
-            "unsupported MobileNetV2 settings: "
-            + ", ".join(sorted(settings))
-        )
+        raise TypeError("unsupported MobileNetV2 settings: " + ", ".join(sorted(settings)))
     if not should_replace:
         raise ValueError("the classifier must be replaced for EuroSAT")
 
     _check_resolution(input_shape, input_resolution)
 
-    model = torchvision_mobilenet_v2(weights=weights)
+    model = mobilenet_v2(weights=weights)
     replace_classifier(model, num_classes, dropout)
     apply_finetune_strategy(model, strategy, unfreeze_last_n)
     return model
@@ -74,9 +64,7 @@ def build_squeezenet(
     settings = dict(overrides)
     torchvision_name = str(settings.pop("torchvision_name", "squeezenet1_1"))
     if torchvision_name != "squeezenet1_1":
-        raise ValueError(
-            f"expected torchvision_name='squeezenet1_1', got {torchvision_name!r}"
-        )
+        raise ValueError(f"expected torchvision_name='squeezenet1_1', got {torchvision_name!r}")
 
     weights = _resolve_weights(
         SqueezeNet1_1_Weights,
@@ -91,16 +79,13 @@ def build_squeezenet(
     settings.pop("backbone_lr_scale", None)
 
     if settings:
-        raise TypeError(
-            "unsupported SqueezeNet settings: "
-            + ", ".join(sorted(settings))
-        )
+        raise TypeError("unsupported SqueezeNet settings: " + ", ".join(sorted(settings)))
     if not should_replace:
         raise ValueError("the classifier must be replaced for EuroSAT")
 
     _check_resolution(input_shape, input_resolution)
 
-    model = torchvision_squeezenet1_1(weights=weights)
+    model = squeezenet1_1(weights=weights)
     replace_classifier(model, num_classes, dropout)
     apply_finetune_strategy(model, strategy, unfreeze_last_n)
     return model
@@ -120,9 +105,7 @@ def param_groups(
         raise TypeError("pretrained model must expose .classifier")
 
     head_parameters = [
-        parameter
-        for parameter in model.classifier.parameters()
-        if parameter.requires_grad
+        parameter for parameter in model.classifier.parameters() if parameter.requires_grad
     ]
     head_ids = {id(parameter) for parameter in head_parameters}
 
@@ -153,20 +136,10 @@ def param_groups(
     if not groups:
         raise ValueError("model has no trainable parameters")
 
-    expected_ids = {
-        id(parameter)
-        for parameter in model.parameters()
-        if parameter.requires_grad
-    }
-    grouped_ids = {
-        id(parameter)
-        for group in groups
-        for parameter in group["params"]
-    }
+    expected_ids = {id(parameter) for parameter in model.parameters() if parameter.requires_grad}
+    grouped_ids = {id(parameter) for group in groups for parameter in group["params"]}
     if grouped_ids != expected_ids:
-        raise RuntimeError(
-            "parameter groups must contain every trainable parameter exactly once"
-        )
+        raise RuntimeError("parameter groups must contain every trainable parameter exactly once")
 
     return groups
 
@@ -182,9 +155,7 @@ def _resolve_weights(enum_type: Any, value: object) -> object:
         return enum_type[value]
     except KeyError as exc:
         valid = [item.name for item in enum_type]
-        raise ValueError(
-            f"unknown weights {value!r}; expected one of {valid}"
-        ) from exc
+        raise ValueError(f"unknown weights {value!r}; expected one of {valid}") from exc
 
 
 def _check_resolution(
@@ -194,6 +165,4 @@ def _check_resolution(
     if len(input_shape) != 3 or input_shape[0] != 3:
         raise ValueError("pretrained models require RGB (3, H, W) input")
     if input_shape[1:] != (input_resolution, input_resolution):
-        raise ValueError(
-            "input_shape and pretrained.input_resolution do not match"
-        )
+        raise ValueError("input_shape and pretrained.input_resolution do not match")

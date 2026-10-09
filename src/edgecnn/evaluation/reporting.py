@@ -17,8 +17,8 @@ from edgecnn.evaluation.plotting import (
 if TYPE_CHECKING:
     from edgecnn.contracts.types import EvalResult
 
-#: A committed run, or an evaluation still in memory (debug runs).
 EvalSource = Union[str, "EvalResult"]
+
 
 def _table_runs(table_name: str) -> list[str]:
     from edgecnn.config import load_stage
@@ -52,9 +52,7 @@ def _read_artifact(
 
     path, schema_name = file_info[artifact]
     if not path.exists():
-        raise FileNotFoundError(
-            f"{run_id} is missing {path.name}"
-        )
+        raise FileNotFoundError(f"{run_id} is missing {path.name}")
 
     return schema.read_json(path, schema_name)
 
@@ -81,6 +79,7 @@ def _save_table(
         )
 
     return text
+
 
 def load_all_runs() -> dict[str, dict[str, Any]]:
     runs: dict[str, dict[str, Any]] = {}
@@ -121,6 +120,7 @@ def load_all_runs() -> dict[str, dict[str, Any]]:
 
     return runs
 
+
 def check_same_hardware(
     run_ids: list[str],
 ) -> dict[str, list[str]]:
@@ -134,9 +134,7 @@ def check_same_hardware(
                 history_path,
                 "history",
             )
-            device = str(
-                history.get("device", "unknown device")
-            )
+            device = str(history.get("device", "unknown device"))
         else:
             device = "missing history"
 
@@ -149,6 +147,7 @@ def check_same_hardware(
         )
 
     return groups
+
 
 def build_custom_comparison_table(
     write: bool = True,
@@ -191,6 +190,7 @@ def build_custom_comparison_table(
         "Model A and Model B comparison.",
     )
 
+
 def build_optimizer_comparison_table(
     write: bool = True,
 ) -> str:
@@ -208,18 +208,11 @@ def build_optimizer_comparison_table(
         target = 0.9 * best_accuracy
 
         epoch_to_target = next(
-            (
-                epoch["epoch"]
-                for epoch in epochs
-                if epoch["val_acc"] >= target
-            ),
+            (epoch["epoch"] for epoch in epochs if epoch["val_acc"] >= target),
             "not reached",
         )
 
-        mean_epoch_time = sum(
-            epoch["epoch_time_s"]
-            for epoch in epochs
-        ) / len(epochs)
+        mean_epoch_time = sum(epoch["epoch_time_s"] for epoch in epochs) / len(epochs)
 
         learning_rate = history.get(
             "hyperparameters",
@@ -253,6 +246,7 @@ def build_optimizer_comparison_table(
         write,
         "Model B optimizer comparison.",
     )
+
 
 def build_final_comparison_table(
     write: bool = True,
@@ -307,6 +301,7 @@ def build_final_comparison_table(
         "Model B versus pretrained lightweight models.",
     )
 
+
 def plot_confusion_matrix(
     source: EvalSource,
     normalize: bool = True,
@@ -357,11 +352,7 @@ def plot_confusion_matrix(
     threshold = values.max() / 2 if values.size else 0.0
     for row in range(values.shape[0]):
         for column in range(values.shape[1]):
-            label = (
-                f"{values[row, column]:.2f}"
-                if normalize
-                else str(int(matrix[row, column]))
-            )
+            label = f"{values[row, column]:.2f}" if normalize else str(int(matrix[row, column]))
             axis.text(
                 column,
                 row,
@@ -383,9 +374,7 @@ def plot_tradeoff_scatter(
     write: bool = True,
 ) -> Figure:
     if x_metric not in {"trainable_params", "macs"}:
-        raise ValueError(
-            "x_metric must be trainable_params or macs"
-        )
+        raise ValueError("x_metric must be trainable_params or macs")
 
     points = []
 
@@ -424,7 +413,6 @@ def plot_tradeoff_scatter(
             textcoords="offset points",
         )
 
-    # Keep only models that improve accuracy as cost increases.
     frontier = []
     best_accuracy = float("-inf")
     for point in sorted(points, key=lambda item: item[1]):
@@ -443,19 +431,13 @@ def plot_tradeoff_scatter(
         axis.legend()
 
     axis.set_xscale("log")
-    axis.set_xlabel(
-        "Trainable parameters"
-        if x_metric == "trainable_params"
-        else "MACs per image"
-    )
+    axis.set_xlabel("Trainable parameters" if x_metric == "trainable_params" else "MACs per image")
     axis.set_ylabel("Test accuracy (%)")
     axis.set_title("Accuracy versus model cost")
     figure.tight_layout()
 
     filename = (
-        "accuracy_vs_params.png"
-        if x_metric == "trainable_params"
-        else "accuracy_vs_macs.png"
+        "accuracy_vs_params.png" if x_metric == "trainable_params" else "accuracy_vs_macs.png"
     )
 
     if write:
@@ -470,20 +452,17 @@ def plot_tradeoff_scatter(
 def export_report_figures(
     write: bool = True,
 ) -> list[Path]:
-    sources = sorted(
-        paths.FIGURES_DIR.rglob("*.png")
-    )
+    sources = sorted(paths.FIGURES_DIR.rglob("*.png"))
 
     destinations = [
-        paths.REPORT_FIGURES_DIR
-        / source.relative_to(paths.FIGURES_DIR)
-        for source in sources
+        paths.REPORT_FIGURES_DIR / source.relative_to(paths.FIGURES_DIR) for source in sources
     ]
 
     if write:
         for source, destination in zip(
             sources,
             destinations,
+            strict=True,
         ):
             destination.parent.mkdir(
                 parents=True,

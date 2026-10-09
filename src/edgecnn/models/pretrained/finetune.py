@@ -4,7 +4,6 @@ from torch import nn
 from torchvision.models.mobilenetv2 import MobileNetV2
 from torchvision.models.squeezenet import SqueezeNet
 
-#: Strategies selectable from configs/stages/pretrained.yaml.
 FINETUNE_STRATEGIES: tuple[str, ...] = ("head_only", "last_n_blocks", "full")
 
 
@@ -16,41 +15,30 @@ def apply_finetune_strategy(
     """Set requires_grad according to the selected fine-tuning strategy."""
     if strategy not in FINETUNE_STRATEGIES:
         raise ValueError(
-            f"unknown strategy {strategy!r}; "
-            f"expected one of {list(FINETUNE_STRATEGIES)}"
+            f"unknown strategy {strategy!r}; expected one of {list(FINETUNE_STRATEGIES)}"
         )
     if not isinstance(model, (MobileNetV2, SqueezeNet)):
-        raise TypeError(
-            "fine-tuning strategies support MobileNetV2 and SqueezeNet only"
-        )
+        raise TypeError("fine-tuning strategies support MobileNetV2 and SqueezeNet only")
 
     if strategy == "full":
         for parameter in model.parameters():
             parameter.requires_grad = True
         return model
 
-    # Start with everything frozen.
     for parameter in model.parameters():
         parameter.requires_grad = False
 
-    # The newly replaced classifier always trains.
     for parameter in model.classifier.parameters():
         parameter.requires_grad = True
 
     if strategy == "head_only":
         return model
 
-    # last_n_blocks
     blocks = list(model.features.children())
     if unfreeze_last_n < 1:
-        raise ValueError(
-            "unfreeze_last_n must be at least 1 for last_n_blocks"
-        )
+        raise ValueError("unfreeze_last_n must be at least 1 for last_n_blocks")
     if unfreeze_last_n > len(blocks):
-        raise ValueError(
-            f"cannot unfreeze {unfreeze_last_n} blocks; "
-            f"model has only {len(blocks)}"
-        )
+        raise ValueError(f"cannot unfreeze {unfreeze_last_n} blocks; model has only {len(blocks)}")
 
     for block in blocks[-unfreeze_last_n:]:
         for parameter in block.parameters():
@@ -97,9 +85,7 @@ def replace_classifier(
         model.classifier[1] = new_head
 
     else:
-        raise TypeError(
-            "replace_classifier supports MobileNetV2 and SqueezeNet only"
-        )
+        raise TypeError("replace_classifier supports MobileNetV2 and SqueezeNet only")
 
     model.num_classes = num_classes
     return model
@@ -109,10 +95,7 @@ def count_trainable_vs_total(model: nn.Module) -> tuple[int, int]:
     total = sum(parameter.numel() for parameter in model.parameters())
 
     trainable = sum(
-        parameter.numel()
-        for parameter in model.parameters()
-        if parameter.requires_grad
+        parameter.numel() for parameter in model.parameters() if parameter.requires_grad
     )
 
     return trainable, total
-
