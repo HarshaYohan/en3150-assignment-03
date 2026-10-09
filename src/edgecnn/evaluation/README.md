@@ -58,8 +58,13 @@ because every column still looks plausible. One code path removes that risk.
   counts; normalised at plot time only, by **true class**, so the diagonal reads as per-class recall.
 - **Macro averaging.** For single-label classification, micro-precision equals accuracy, so a micro
   column would silently repeat the accuracy column.
-- **Latency on CPU, batch size 1, for every model** — the §6 argument is about edge devices.
-- **Units.** `model_size_kb` is always KB; convert to MB only for the §5 table.
+- **Latency on CPU, one thread, batch size 1, for every model** — the §6 argument is about edge
+  devices. The mean of 100 timed passes after 10 untimed ones; the median is recorded too.
+- **Peak memory** = the weights plus the largest set of intermediate results alive at once, worked
+  out from the model's graph (`torch.fx`): each result is freed after its last use, and views and
+  in-place results are counted once. Machine-independent.
+- **Units.** `model_size_kb` is always KB; convert to MB only for the §5 table. 1 KB = 1,024 bytes
+  and 1 MB = 1,048,576 bytes, as in torchvision's published file sizes.
 - **Figure resolution.** Inline figures at `INLINE_DPI` keep committed notebooks small; saved PNGs
   use `FIGURE_DPI`, for print.
 
