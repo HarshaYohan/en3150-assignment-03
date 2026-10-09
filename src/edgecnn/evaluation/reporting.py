@@ -27,7 +27,13 @@ notebook 07 passes ``write = (MODE == "official")``. Results are returned
 either way, so a debug pass still shows everything inline.
 """
 
-from __future__ import annotations
+import numpy as np
+from matplotlib.figure import Figure
+
+from edgecnn.contracts import paths, schema
+from edgecnn.evaluation.plotting import save_figure
+
+
 
 from typing import TYPE_CHECKING, Any, Union
 
@@ -133,21 +139,70 @@ def plot_confusion_matrix(
     normalize: bool = True,
     write: bool = False,
 ) -> Figure:
-    """Render one run's confusion matrix; returns the Figure.
+    if isinstance(source, str):
+        payload = schema.read_json(paths.test_metrics_json(source), "test_metrics")
+        run_id = source
+        class_names = list(payload["class_names"])
+        matrix = np.asarray(payload["confusion_matrix"], dtype=float)
+    else:
+        run_id = source.run_id
+        class_names = list(source.class_names)
+        matrix = np.asarray(source.confusion_matrix, dtype=float)
 
-    ``source`` is a ``run_id`` (reads the committed ``test_metrics.json``) or an
-    ``EvalResult`` still in memory. With ``write=True`` - which notebooks pass as
-    ``cfg.is_official`` - also saves ``paths.confusion_matrix_png(run_id)``.
+    if matrix.ndim != 2 or matrix.shape[0] != matrix.shape[1]:
+        raise ValueError("confusion matrix must be square")
+    if matrix.shape[0] != len(class_names):
+        raise ValueError("confusion matrix size must match class_names")
 
-    Stored counts are raw; normalise at plot time only. Normalise by TRUE class
-    (rows sum to 1) so the diagonal reads as per-class recall - normalising by
-    column gives precision instead, and an unlabelled plot leaves the reader
-    unable to tell which.
+    values = matrix
+    if normalize:
+        row_sums = matrix.sum(axis=1, keepdims=True)
+        values = np.divide(
+            matrix,
+            row_sums,
+            out=np.zeros_like(matrix),
+            where=row_sums != 0,
+        )
 
-    Label both axes with ``class_names`` and rotate the x labels; EuroSAT class
-    names are long enough to overlap otherwise.
-    """
-    raise NotImplementedError("Member 4: implement plot_confusion_matrix")
+    size = max(6.0, len(class_names) * 0.7)
+    figure = Figure(figsize=(size, size))
+    axis = figure.subplots()
+    image = axis.imshow(values, cmap="Blues", interpolation="nearest")
+    figure.colorbar(image, ax=axis, fraction=0.046, pad=0.04)
+
+    axis.set(
+        title=f"Confusion matrix — {run_id}",
+        xlabel="Predicted class",
+        ylabel="True class",
+        xticks=range(len(class_names)),
+        yticks=range(len(class_names)),
+        xticklabels=class_names,
+        yticklabels=class_names,
+    )
+    axis.tick_params(axis="x", labelrotation=45)
+
+    threshold = values.max() / 2 if values.size else 0.0
+    for row in range(values.shape[0]):
+        for column in range(values.shape[1]):
+            label = (
+                f"{values[row, column]:.2f}"
+                if normalize
+                else str(int(matrix[row, column]))
+            )
+            axis.text(
+                column,
+                row,
+                label,
+                ha="center",
+                va="center",
+                color="white" if values[row, column] > threshold else "black",
+                fontsize=8,
+            )
+
+    figure.tight_layout()
+    if write:
+        save_figure(figure, paths.confusion_matrix_png(run_id))
+    return figure
 
 
 def plot_tradeoff_scatter(x_metric: str = "trainable_params", write: bool = True) -> Figure:
