@@ -27,6 +27,13 @@ venv/
 env/
 ENV/
 
+# --- Local settings and secrets ---------------------------------------------
+# A .env may hold personal values or a token, and the repository is public.
+# .env.example is the committed template - see its header.
+.env
+.env.*
+!.env.example
+
 # --- Tooling caches ---------------------------------------------------------
 .pytest_cache/
 .mypy_cache/
@@ -75,6 +82,7 @@ report/*.aux
 report/*.log
 report/*.out
 report/*.synctex.gz
+MEMBER_3_GUIDE.md
 
 # --- Local workflow notes ---------------------------------------------------
 /MEMBER_4_WORKFLOW.md

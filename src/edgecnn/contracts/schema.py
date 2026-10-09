@@ -51,6 +51,7 @@ SCHEMA_FILES: dict[str, str] = {
 MANIFEST_COLUMNS: tuple[str, ...] = ("relative_path", "label_index", "label_name", "split")
 
 _CACHE: dict[str, dict[str, Any]] = {}
+_VALIDATORS: dict[str, Any] = {}
 
 
 class ContractViolation(Exception):
@@ -75,6 +76,18 @@ def load_schema(name: str) -> dict[str, Any]:
     return _CACHE[name]
 
 
+def _validator(name: str) -> Any:
+    """A validator for a named schema, built once - after checking the schema itself."""
+    if name not in _VALIDATORS:
+        import jsonschema
+
+        schema = load_schema(name)
+        cls = jsonschema.validators.validator_for(schema)
+        cls.check_schema(schema)
+        _VALIDATORS[name] = cls(schema)
+    return _VALIDATORS[name]
+
+
 def validate(payload: Any, schema_name: str, *, source: str | Path = "<memory>") -> None:
     """Validate ``payload`` against a named schema.
 
@@ -84,7 +97,11 @@ def validate(payload: Any, schema_name: str, *, source: str | Path = "<memory>")
     import jsonschema
 
     try:
-        jsonschema.validate(instance=payload, schema=load_schema(schema_name))
+        # the same error jsonschema.validate() would report, without rebuilding the
+        # validator on every call - the manifest validates 27,000 rows one by one
+        error = jsonschema.exceptions.best_match(_validator(schema_name).iter_errors(payload))
+        if error is not None:
+            raise error
     except jsonschema.ValidationError as exc:
         location = "/".join(str(part) for part in exc.absolute_path) or "<root>"
         raise ContractViolation(
@@ -100,7 +117,8 @@ def write_json(path: Path, payload: Any, schema_name: str) -> Path:
     """Validate, then write pretty-printed JSON. Creates parent directories."""
     validate(payload, schema_name, source=path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, sort_keys=False) + "\n", encoding="utf-8")
+    text = json.dumps(payload, indent=2, sort_keys=False) + "\n"
+    path.write_text(text, encoding="utf-8", newline="\n")  # the same bytes on every OS
     return path
 
 

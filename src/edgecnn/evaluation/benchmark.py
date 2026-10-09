@@ -23,7 +23,7 @@ hardware, whoever trained which model where.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from torch import nn
@@ -54,10 +54,10 @@ def profile_model(
       measure it, rather than computing ``numel * 4``. The computed figure
       misses buffers such as BatchNorm running statistics, which are real
       bytes on the device.
-    * **macs** - via ``thop.profile``. Note that thop reports MACs while some
-      papers report FLOPs at roughly ``2 x MACs``; state which is used in the
-      report or the comparison against published MobileNet figures will look
-      wrong by a factor of two.
+    * **macs** - from :func:`count_macs`: convolution and fully-connected
+      multiply-accumulates for one image. Papers that count FLOPs report roughly
+      ``2 x MACs``; state which is used in the report, or the comparison against
+      published MobileNet figures will look wrong by a factor of two.
     * **inference_latency_ms** - batch size 1, ``model.eval()``,
       ``torch.no_grad()``, warm up first. Measure on **CPU for every model**
       even on a CUDA machine: the Section 6 argument is about edge deployment,
@@ -76,13 +76,63 @@ def profile_model(
 
 
 def count_macs(model: nn.Module, input_shape: tuple[int, int, int]) -> int:
-    """MACs for a single forward pass, via ``thop.profile``.
+    """Multiply-accumulate operations (MACs) for one image's forward pass.
 
-    ``thop`` mutates the model by attaching ``total_ops`` buffers. Profile a
-    ``copy.deepcopy`` of the model, or those buffers end up in the checkpoint
-    and in ``model_size_kb``, inflating the reported size.
+    Counts the convolutions and fully-connected layers - the convention of the
+    MobileNet and SqueezeNet papers and of torchvision's published model
+    figures, which this reproduces exactly (MobileNetV2 0.301 G, SqueezeNet 1.1
+    0.349 G, at 224x224). Batch-norm, activations, pooling and bias additions
+    are left out: they are cheap next to the convolutions, and counting them
+    would make the numbers incomparable with published ones.
+
+    * a convolution costs output values x (input channels / groups) x kernel
+      area - so a depthwise convolution, with one group per channel, costs a
+      fraction of a standard one;
+    * a fully-connected layer costs output values x input features.
+
+    One MAC is one multiply and one add; papers that count FLOPs report
+    roughly twice as many. The model is measured on a copy in evaluation mode,
+    so the caller's model - its weights, batch-norm statistics and train /
+    eval mode - is untouched.
+
+    Args:
+        model: Any model that takes a ``(1, *input_shape)`` batch.
+        input_shape: ``(channels, height, width)`` of one image.
+
+    Returns:
+        The number of MACs at batch size 1.
     """
-    raise NotImplementedError("Member 1: implement count_macs")
+    import copy
+    import math
+
+    import torch
+    from torch import nn
+
+    probe = copy.deepcopy(model).cpu().eval()
+    total = 0
+
+    def conv(module: Any, inputs: Any, output: torch.Tensor) -> None:
+        nonlocal total
+        per_value = (module.in_channels // module.groups) * math.prod(module.kernel_size)
+        total += output[0].numel() * per_value
+
+    def linear(module: Any, inputs: Any, output: torch.Tensor) -> None:
+        nonlocal total
+        total += output[0].numel() * module.in_features
+
+    hooks = []
+    for module in probe.modules():
+        if isinstance(module, (nn.Conv1d, nn.Conv2d, nn.Conv3d)):
+            hooks.append(module.register_forward_hook(conv))
+        elif isinstance(module, nn.Linear):
+            hooks.append(module.register_forward_hook(linear))
+    try:
+        with torch.no_grad():
+            probe(torch.zeros(1, *input_shape))
+    finally:
+        for hook in hooks:
+            hook.remove()
+    return int(total)
 
 
 def measure_latency(

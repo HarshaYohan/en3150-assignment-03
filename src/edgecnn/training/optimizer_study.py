@@ -53,4 +53,28 @@ def summarize_study(results: dict[str, TrainResult]) -> dict[str, Any]:
     travel along consistently descending directions. Show both in the curves
     rather than asserting them.
     """
-    raise NotImplementedError("Member 3: implement summarize_study")
+    if not results:
+        raise ValueError("optimizer study requires at least one result")
+
+    summary: dict[str, Any] = {}
+    for optimizer_name, result in results.items():
+        if not result.epochs:
+            raise ValueError(f"optimizer {optimizer_name!r} has no completed epochs")
+
+        best_val_acc = max(record.val_acc for record in result.epochs)
+        threshold = 0.9 * best_val_acc
+        convergence_epoch = next(
+            record.epoch for record in result.epochs if record.val_acc >= threshold
+        )
+        final = result.epochs[-1]
+        summary[optimizer_name] = {
+            "best_val_acc": best_val_acc,
+            "best_epoch": max(result.epochs, key=lambda record: record.val_acc).epoch,
+            "epochs_to_90pct_best": convergence_epoch,
+            "mean_epoch_time_s": result.mean_epoch_time_s,
+            "final_train_val_gap": final.train_acc - final.val_acc,
+            "final_train_acc": final.train_acc,
+            "final_val_acc": final.val_acc,
+            "epochs_completed": len(result.epochs),
+        }
+    return summary

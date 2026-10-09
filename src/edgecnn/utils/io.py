@@ -1,15 +1,17 @@
-"""Small filesystem helpers.
+"""Small file helpers: hashing, directories, and Markdown tables for the report.
 
-Owner: Member 1.
+JSON results are written through ``edgecnn.contracts.schema`` instead, which
+validates them first.
 
-For JSON that crosses a member boundary use
-``edgecnn.contracts.schema.read_json`` / ``write_json`` instead - those
-validate against the contract. These helpers are for everything else.
+Team notes:
+Owner: Member 1. markdown_table / write_markdown_table are used by Member 2
+(architecture tables) and Member 4 (comparison tables).
 """
 
 from __future__ import annotations
 
 import hashlib
+from numbers import Integral, Real
 from pathlib import Path
 from typing import Any
 
@@ -33,15 +35,82 @@ def ensure_dir(path: Path) -> Path:
     return path
 
 
+def repo_relative(path: Path) -> str:
+    """``path`` relative to the repository, with forward slashes, when it is inside it.
+
+    For messages and recorded paths: notebook outputs and result files are
+    committed, so they must never contain a personal absolute path.
+    """
+    from edgecnn.contracts.paths import REPO_ROOT
+
+    try:
+        return Path(path).resolve().relative_to(REPO_ROOT).as_posix()
+    except ValueError:
+        return Path(path).as_posix()
+
+
+def format_cell(value: Any) -> str:
+    """Format one table cell: thousands separators for integers, 4 significant
+    digits for small floats, one decimal for large ones, ``—`` for missing values."""
+    if value is None:
+        return "—"
+    if isinstance(value, bool):
+        return str(value)
+    if isinstance(value, Integral):
+        return f"{int(value):,}"
+    if isinstance(value, Real):
+        number = float(value)
+        return f"{number:,.1f}" if abs(number) >= 1000 else f"{number:.4g}"
+    return str(value).replace("|", "\\|").replace("\n", " ")
+
+
+def markdown_table(headers: list[str], rows: list[list[Any]], caption: str | None = None) -> str:
+    """A GitHub-flavoured Markdown table as a string.
+
+    Columns whose values are all numbers are right-aligned, so digits line up.
+
+    Args:
+        headers: Column names.
+        rows: One list of cell values per row, in header order.
+        caption: Optional line printed in italics above the table.
+
+    Raises:
+        ValueError: if a row's length differs from the number of headers.
+    """
+    for index, row in enumerate(rows):
+        if len(row) != len(headers):
+            raise ValueError(
+                f"row {index} has {len(row)} cells but there are {len(headers)} headers"
+            )
+
+    def numeric(column: int) -> bool:
+        cells = [row[column] for row in rows if row[column] is not None]
+        return bool(cells) and all(
+            isinstance(cell, Real) and not isinstance(cell, bool) for cell in cells
+        )
+
+    lines = []
+    if caption:
+        lines += [f"*{caption}*", ""]
+    lines.append("| " + " | ".join(format_cell(h) for h in headers) + " |")
+    lines.append("|" + "|".join("---:" if numeric(c) else "---" for c in range(len(headers))) + "|")
+    for row in rows:
+        lines.append("| " + " | ".join(format_cell(cell) for cell in row) + " |")
+    return "\n".join(lines) + "\n"
+
+
 def write_markdown_table(
     path: Path,
     headers: list[str],
     rows: list[list[Any]],
     caption: str | None = None,
 ) -> Path:
-    """Write a GitHub-flavoured Markdown table.
+    """Write :func:`markdown_table` to ``path``, creating parent directories.
 
-    Used by Member 4 for everything in ``results/tables/``. Markdown rather
-    than CSV because these are pasted straight into the report.
+    Markdown rather than CSV because the tables are pasted straight into the
+    report. Returns ``path``.
     """
-    raise NotImplementedError("Member 1: implement write_markdown_table")
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(markdown_table(headers, rows, caption), encoding="utf-8")
+    return path

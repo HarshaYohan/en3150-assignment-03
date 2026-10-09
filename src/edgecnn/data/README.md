@@ -42,6 +42,7 @@ labels : int64,   (B,),           values in [0, num_classes)
 |---|---|
 | `synthetic.py` | **Build this first.** A tiny generated dataset that satisfies the full contract. `MODE = "synthetic"` selects it, so Members 3 and 4 can start before EuroSAT downloads |
 | `loaders.py` | `build_dataloaders(cfg) -> DataBundle` |
+| `cache.py` | decodes every image once into one `uint8` array saved beside the images, rebuilt when any image changes — see [`data/processed/README.md`](../../../data/processed/README.md#the-pixel-cache) |
 | `prepare.py` | `prepare_dataset(cfg, force=False)` draws the split; `ensure_images_present(cfg)` refetches the images on a fresh clone |
 | `transforms.py` | augmentation and normalisation pipelines |
 | `inspect.py` | the §1 split table, class-distribution figure and sample grid |
