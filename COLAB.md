@@ -97,6 +97,9 @@ the left sidebar, and add:
 | `GIT_NAME` | your name, as it should appear on commits | the same |
 | `GIT_EMAIL` | your GitHub email (the `…@users.noreply.github.com` address is fine) | the same |
 
+The same five names, with placeholder values, are listed in [`.env.example`](.env.example). If you
+keep your own values in a copy called `.env`, it stays out of git — but leave the token out of it.
+
 The first time a notebook asks, allow it access to your secrets.
 
 **Why a token at all, when you own your fork?** Owning the fork gives *your GitHub account*
@@ -150,8 +153,10 @@ The notebook stays on your laptop. Only the running moves to Colab's GPU.
 1. **Push your work:** `git push`. Cell 1 on the Colab machine clones from GitHub.
 2. **Point cell 1 at it:** VS Code can't read Colab Secrets, so edit the two defaults in cell 1 to
    your fork and branch ([§4.3](#43-repo-and-branch--where-colab-gets-the-code)).
-3. **Switch the kernel:** in the notebook, **Select Kernel** (top right) → **Colab** → pick a runtime
-   with a **GPU** → sign in with Google if asked.
+3. **Switch the kernel:** in the notebook, **Select Kernel** (top right; **Select Another Kernel…** if
+   one is already chosen) → **Colab** → **New Colab Server** → sign in with Google → **GPU → T4** →
+   pick the server's **Python 3** kernel. Until you have done this once, the extension's Colab panel
+   says *No assigned Colab servers*. That only means no server exists yet.
 4. **Run cell 1.** The first time it clones and installs, which takes about a minute. It then prints
    the commit it is running — check that it is yours.
 5. **Run the rest step by step** with `MODE = "debug"` (or `"synthetic"`). Outputs land in your local
@@ -159,7 +164,9 @@ The notebook stays on your laptop. Only the running moves to Colab's GPU.
 6. **Fix and repeat.** Edit locally → commit → push → **re-run cell 1** (it fetches your new commit) →
    re-run the cells that *build* things (loaders, model, trainer). Objects built before the update
    keep the old code.
-7. **Hand back:** **Select Kernel** → `.venv`, and put cell 1's defaults back.
+7. **Hand back:** **Select Kernel** → `.venv`, and put cell 1's defaults back. Then release the
+   machine: `Ctrl+Shift+P` → **Colab: Remove Server**. An idle server keeps using your free GPU time
+   until Colab times it out.
 
 Path A is for runs that write nothing. Official runs push result files from the Colab machine with
 the token in your Colab Secrets, which VS Code cannot read — do those with path B.
@@ -225,6 +232,7 @@ Do steps 7 and 8 before you close the tab — a Colab session is wiped when it e
 
 | Symptom | Cause | Fix |
 |---|---|---|
+| VS Code: the Colab panel says *No assigned Colab servers* | no Colab server created yet — normal before the first connection | **Select Kernel → Colab → New Colab Server** ([§5](#5-path-a--hand-a-development-run-over-from-vs-code), step 3) |
 | Cell 1: `Remote branch … not found` or `… is not a commit` | the branch isn't pushed, or its name is misspelled | push it; check `A03_BRANCH` |
 | Cell 1: `could not read Username` | the repository name is misspelled, or it is private | check `A03_REPO` (or the default in VS Code) |
 | Cell 1 prints a commit that isn't your latest | not pushed yet, or cell 1 is using the defaults | push; set `A03_REPO` / `A03_BRANCH` (browser) or edit the defaults (VS Code); re-run cell 1 |

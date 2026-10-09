@@ -6,7 +6,7 @@
 | Folder | Contents | Committed? |
 |---|---|---|
 | `raw/` | the original EuroSAT download | **no** — large, and reproducible from `configs/stages/data.yaml` |
-| `processed/` | the prepared 64×64 images | **no** — a deterministic transform of `raw/` |
+| `processed/` | the prepared 64×64 images and their decoded-pixel cache | **no** — a deterministic transform of `raw/` |
 | `splits/` | the split definition | **yes** — this is the reproducibility contract |
 
 ## Why `splits/` is committed and the images are not

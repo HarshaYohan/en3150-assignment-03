@@ -1,0 +1,8 @@
+# ---------------------------------------------------------------------------
+# Files whose exact bytes are checked must be identical on every machine.
+#
+# split_meta.json records the SHA-256 of split_manifest.csv. A Windows checkout
+# with core.autocrlf would rewrite the manifest's line endings and break that
+# check, so the split files are always checked out with LF line endings.
+# ---------------------------------------------------------------------------
+data/splits/* text eol=lf
