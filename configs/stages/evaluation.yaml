@@ -31,7 +31,7 @@ benchmark:
   latency_batch_size: 1        # the batch size an edge device actually uses
   latency_warmup: 10
   latency_repeats: 100
-  count_macs: true             # via thop
+  count_macs: true             # conv + fully-connected multiply-accumulates (paper convention)
   measure_peak_memory: true
   model_size_from: state_dict
 
