@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import re
 import shutil
+import textwrap
 import warnings
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Union
@@ -18,6 +20,22 @@ if TYPE_CHECKING:
     from edgecnn.contracts.types import EvalResult
 
 EvalSource = Union[str, "EvalResult"]
+
+
+def _display_class_name(name: str) -> str:
+    """Turn dataset identifiers such as ``AnnualCrop`` into readable labels."""
+    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])", " ", name.replace("_", " "))
+
+
+def _wrapped_class_name(name: str) -> str:
+    """Wrap long class names for compact horizontal x-axis labels."""
+    return "\n".join(
+        textwrap.wrap(
+            _display_class_name(name),
+            width=11,
+            break_long_words=False,
+        )
+    )
 
 
 def _table_runs(table_name: str) -> list[str]:
@@ -332,8 +350,11 @@ def plot_confusion_matrix(
             where=row_sums != 0,
         )
 
-    size = max(6.0, len(class_names) * 0.7)
-    figure = Figure(figsize=(size, size))
+    display_names = [_display_class_name(name) for name in class_names]
+    x_display_names = [_wrapped_class_name(name) for name in class_names]
+    width = max(11.5, len(class_names) * 1.05)
+    height = max(6.5, len(class_names) * 0.65 + 1.0)
+    figure = Figure(figsize=(width, height))
     axis = figure.subplots()
     image = axis.imshow(values, cmap="Blues", interpolation="nearest")
     figure.colorbar(image, ax=axis, fraction=0.046, pad=0.04)
@@ -344,26 +365,35 @@ def plot_confusion_matrix(
         ylabel="True class",
         xticks=range(len(class_names)),
         yticks=range(len(class_names)),
-        xticklabels=class_names,
-        yticklabels=class_names,
+        xticklabels=x_display_names,
+        yticklabels=display_names,
     )
-    axis.tick_params(axis="x", labelrotation=45)
+    axis.tick_params(axis="x", labelrotation=30, labelsize=8, pad=5)
+    axis.tick_params(axis="y", labelsize=9)
+    axis.grid(False)
+    for label in axis.get_xticklabels():
+        label.set_horizontalalignment("right")
+        label.set_rotation_mode("anchor")
 
     threshold = values.max() / 2 if values.size else 0.0
     for row in range(values.shape[0]):
         for column in range(values.shape[1]):
-            label = f"{values[row, column]:.2f}" if normalize else str(int(matrix[row, column]))
+            value = values[row, column]
+            if normalize:
+                label = "" if value < 0.005 else f"{value:.2f}"
+            else:
+                label = "" if matrix[row, column] == 0 else str(int(matrix[row, column]))
             axis.text(
                 column,
                 row,
                 label,
                 ha="center",
                 va="center",
-                color="white" if values[row, column] > threshold else "black",
+                color="white" if value > threshold else "black",
                 fontsize=8,
             )
 
-    figure.tight_layout()
+    figure.tight_layout(pad=1.4)
     if write:
         save_figure(figure, paths.confusion_matrix_png(run_id))
     return figure
