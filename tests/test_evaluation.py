@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -235,3 +236,49 @@ def test_curve_figures_come_back_closed_so_notebooks_show_them_once() -> None:
     history = {"run_id": RUN, "model": "model_b", "optimizer": "adam", "epochs": epochs}
     for fig in (plot_loss_curves(history), plot_optimizer_overlay([history])):
         assert not plt.fignum_exists(fig.number)
+
+
+def test_confusion_matrix_layout_accommodates_long_class_names() -> None:
+    import matplotlib
+
+    matplotlib.use("Agg")
+
+    from edgecnn.evaluation.reporting import plot_confusion_matrix
+
+    class_names = [
+        "AnnualCrop",
+        "Forest",
+        "HerbaceousVegetation",
+        "Highway",
+        "Industrial",
+        "Pasture",
+        "PermanentCrop",
+        "Residential",
+        "River",
+        "SeaLake",
+    ]
+    evaluation = SimpleNamespace(
+        run_id="model_a__adam__seed42",
+        class_names=class_names,
+        confusion_matrix=np.eye(len(class_names), dtype=int).tolist(),
+    )
+
+    figure = plot_confusion_matrix(evaluation)
+    axis = figure.axes[0]
+    width, height = figure.get_size_inches()
+
+    assert width > height
+    assert [label.get_text() for label in axis.get_xticklabels()] == [
+        "Annual Crop",
+        "Forest",
+        "Herbaceous Vegetation",
+        "Highway",
+        "Industrial",
+        "Pasture",
+        "Permanent Crop",
+        "Residential",
+        "River",
+        "Sea Lake",
+    ]
+    assert all(label.get_rotation() == 40 for label in axis.get_xticklabels())
+    assert all(label.get_horizontalalignment() == "right" for label in axis.get_xticklabels())
