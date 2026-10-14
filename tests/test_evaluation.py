@@ -271,14 +271,15 @@ def test_confusion_matrix_layout_accommodates_long_class_names() -> None:
     assert [label.get_text() for label in axis.get_xticklabels()] == [
         "Annual Crop",
         "Forest",
-        "Herbaceous Vegetation",
+        "Herbaceous\nVegetation",
         "Highway",
         "Industrial",
         "Pasture",
-        "Permanent Crop",
+        "Permanent\nCrop",
         "Residential",
         "River",
         "Sea Lake",
     ]
-    assert all(label.get_rotation() == 40 for label in axis.get_xticklabels())
+    assert all(label.get_rotation() == 30 for label in axis.get_xticklabels())
     assert all(label.get_horizontalalignment() == "right" for label in axis.get_xticklabels())
+    assert sum(text.get_text() == "" for text in axis.texts) == 90
